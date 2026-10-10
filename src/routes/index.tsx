@@ -20,12 +20,14 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Art } from "@/components/GameArt";
 import { FlowerWordSearch } from "@/components/quests/FlowerWordSearch";
 import { PackingQuest } from "@/components/quests/PackingQuest";
 import { Button } from "@/components/ui/button";
 import belandaPlace from "@/assets/places/belanda.webp";
 import jakartaPlace from "@/assets/places/jakarta.webp";
 import jogjaPlace from "@/assets/places/jogja.webp";
+import daisyFlower from "@/assets/flowers/daisy.webp";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -202,6 +204,9 @@ function QuestMap({ completed, enter }: { completed: number; enter: (place: Plac
 
       <div className="quest-map" aria-label="Peta petualangan">
         <div className="route-line" />
+        <svg className="route-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M26 15 C 62 15, 40 46, 72 46 S 40 77, 27 77" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray="9 8" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        </svg>
         {STOPS.map((stop, index) => {
           const locked = index > completed;
           const done = index < completed;
@@ -225,9 +230,9 @@ function QuestMap({ completed, enter }: { completed: number; enter: (place: Plac
             </article>
           );
         })}
-        <div className="map-decoration deco-cloud">☁️</div>
-        <div className="map-decoration deco-flower">🌼</div>
-        <div className="map-decoration deco-plane">✈</div>
+        <div className="map-decoration deco-cloud"><Art name="awan" fallback="☁️" className="h-14 w-14 object-contain" /></div>
+        <div className="map-decoration deco-flower"><img src={daisyFlower} alt="" draggable={false} className="h-14 w-14 rounded-full border-2 border-foreground bg-white object-contain p-0.5" /></div>
+        <div className="map-decoration deco-plane"><Art name="pesawat" fallback="✈" className="h-14 w-14 object-contain" /></div>
       </div>
 
       <div className="mt-8 flex items-center justify-between border-t border-border/60 pt-5 text-xs font-bold text-muted-foreground">
@@ -241,7 +246,7 @@ function QuestMap({ completed, enter }: { completed: number; enter: (place: Plac
   );
 }
 
-function GameShell({ title, location, icon, onBack, children }: { title: string; location: string; icon: string; onBack: () => void; children: React.ReactNode }) {
+function GameShell({ title, location, icon, onBack, children }: { title: string; location: string; icon: React.ReactNode; onBack: () => void; children: React.ReactNode }) {
   return (
     <section className="relative z-10 mx-auto w-full max-w-4xl px-4 pb-12 pt-3 sm:px-8 sm:pt-8">
       <Button variant="ghost" className="mb-5 font-bold" onClick={onBack}><ChevronLeft /> Peta Quest</Button>
@@ -258,7 +263,7 @@ function GameShell({ title, location, icon, onBack, children }: { title: string;
 
 function JakartaQuest({ onBack, onWin }: { onBack: () => void; onWin: () => void }) {
   return (
-    <GameShell title="Packing Koper Ajaib" location="POS 01 • JAKARTA" icon="🧳" onBack={onBack}>
+    <GameShell title="Packing Koper Ajaib" location="POS 01 • JAKARTA" icon={<img src={jakartaPlace} alt="" draggable={false} className="h-12 w-12 rounded-full border-2 border-foreground object-cover" />} onBack={onBack}>
       <div className="game-copy"><span className="round-pill">SIAP BERANGKAT</span><p>Masukkan semua barang ke koper tanpa numpuk. Barang kecil wajib masuk pouch transparan (kecuali daleman!). Bongkar pasang sampai semuanya muat.</p></div>
       <PackingQuest onWin={onWin} />
     </GameShell>
@@ -267,7 +272,7 @@ function JakartaQuest({ onBack, onWin }: { onBack: () => void; onWin: () => void
 
 function JogjaQuest({ onBack, onWin, onFound }: { onBack: () => void; onWin: () => void; onFound: () => void }) {
   return (
-    <GameShell title="Taman Kata Bunga" location="POS 02 • JOGJA / UGM" icon="🌻" onBack={onBack}>
+    <GameShell title="Taman Kata Bunga" location="POS 02 • JOGJA / UGM" icon={<img src={jogjaPlace} alt="" draggable={false} className="h-12 w-12 rounded-full border-2 border-foreground object-cover" />} onBack={onBack}>
       <div className="game-copy"><span className="round-pill">WORD SEARCH</span><p>Temukan 15 nama bunga yang tersembunyi. Setiap bunga yang mekar membawa bahasa bunga dan pesan penyemangat untuk Mia.</p></div>
       <FlowerWordSearch onWin={onWin} onFound={onFound} />
     </GameShell>
@@ -288,9 +293,13 @@ const MAZE_MAP = [
   ".#........F",
 ];
 const MAZE_SIZE = MAZE_MAP.length;
-const FOOD_EMOJI: Record<string, string> = { R: "🍚", C: "🍗", V: "🥬" };
-const FOODS: Record<string, string> = {};
-MAZE_MAP.forEach((row, y) => [...row].forEach((ch, x) => { if (FOOD_EMOJI[ch]) FOODS[`${x},${y}`] = FOOD_EMOJI[ch]; }));
+const FOOD_TYPES: Record<string, { art: string; emoji: string }> = {
+  R: { art: "nasi", emoji: "🍚" },
+  C: { art: "ayam", emoji: "🍗" },
+  V: { art: "sayur", emoji: "🥬" },
+};
+const FOODS: Record<string, { art: string; emoji: string }> = {};
+MAZE_MAP.forEach((row, y) => [...row].forEach((ch, x) => { const f = FOOD_TYPES[ch]; if (f) FOODS[`${x},${y}`] = f; }));
 const PIGEONS: [number, number][][] = [
   [[6, 0], [7, 0], [8, 0], [9, 0], [10, 0]],
   [[6, 6], [7, 6], [8, 6], [9, 6], [10, 6]],
@@ -330,7 +339,8 @@ function MazeQuest({ onBack, onWin }: { onBack: () => void; onWin: () => void })
     if (hit(next)) { setPosition(next); die(next); return; }
     setPosition(next);
     const key = `${next[0]},${next[1]}`;
-    if (FOODS[key] && !foods.includes(key)) { setFoods([...foods, key]); setNote(`Dapat ${FOODS[key]}!`); }
+    const food = FOODS[key];
+    if (food && !foods.includes(key)) { setFoods([...foods, key]); setNote(`Dapat ${food.emoji}!`); }
     if (t === "F") { if (foods.length === 3) onWin(); else setNote("Bahannya belum lengkap, cari lagi ya!"); }
   };
   useEffect(() => {
@@ -342,7 +352,7 @@ function MazeQuest({ onBack, onWin }: { onBack: () => void; onWin: () => void })
     return () => window.removeEventListener("keydown", key);
   });
   return (
-    <GameShell title="Gowes Mencari Rasa" location="POS 03 • BELANDA" icon="🚲" onBack={onBack}>
+    <GameShell title="Gowes Mencari Rasa" location="POS 03 • BELANDA" icon={<img src={belandaPlace} alt="" draggable={false} className="h-12 w-12 rounded-full border-2 border-foreground object-cover" />} onBack={onBack}>
       <div className="game-copy"><span className="round-pill">MAASTRICHT MAZE</span><p>Kumpulkan nasi, ayam bakar, dan sayur, lalu antar Mia ke dapur Asia. Hindari merpati, sekali tertabrak Mia mulai lagi dari awal. Seberangi kanal lewat jembatan.</p></div>
       <div className="maze-wrap">
         <div className="maze-grid" style={{ gridTemplateColumns: `repeat(${MAZE_SIZE},1fr)` }}>
@@ -353,13 +363,14 @@ function MazeQuest({ onBack, onWin }: { onBack: () => void; onWin: () => void })
             const t = tile(x, y);
             const isMia = position[0] === x && position[1] === y;
             const cls = t === "#" ? "wall" : t === "~" ? "water" : t === "=" ? "bridge" : t === "F" ? "finish" : "";
+            const food = FOODS[key];
             return <div key={key} className={`maze-cell ${cls}`}>
-              {crash && crash[0] === x && crash[1] === y ? <span className="mia-crash">💥</span> : isMia ? <span className="mia-bike">🚲</span> : hit([x, y]) ? "🐦" : FOODS[key] && !foods.includes(key) ? FOODS[key] : t === "F" ? "🏠" : ""}
+              {crash && crash[0] === x && crash[1] === y ? <span className="mia-crash"><Art name="tabrak" fallback="💥" /></span> : isMia ? <span className="mia-bike"><Art name="sepeda" fallback="🚲" /></span> : hit([x, y]) ? <Art name="merpati" fallback="🐦" /> : food && !foods.includes(key) ? <Art name={food.art} fallback={food.emoji} /> : t === "F" ? <Art name="dapur" fallback="🏠" /> : ""}
             </div>;
           })}
         </div>
         <div className="maze-side">
-          <div className="ingredient-list"><strong>KERANJANG</strong>{Object.entries(FOODS).map(([key, emoji]) => <span key={key} className={foods.includes(key) ? "found" : ""}>{emoji}</span>)}</div>
+          <div className="ingredient-list"><strong>KERANJANG</strong>{Object.entries(FOODS).map(([key, food]) => <span key={key} className={foods.includes(key) ? "found" : ""}><Art name={food.art} fallback={food.emoji} className="h-7 w-7 object-contain" /></span>)}</div>
           <div className="dpad">
             <Button size="icon" variant="outline" className="up" onClick={() => move(0, -1)} aria-label="Atas"><ArrowUp /></Button>
             <Button size="icon" variant="outline" className="left" onClick={() => move(-1, 0)} aria-label="Kiri"><ArrowLeft /></Button>
