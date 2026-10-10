@@ -13,6 +13,7 @@ import mandiImg from "@/assets/pack/mandi.png";
 import olehImg from "@/assets/pack/oleh.png";
 import payungImg from "@/assets/pack/payung.png";
 import pouchImg from "@/assets/pack/pouch.png";
+import pouchWideImg from "@/assets/pack/pouch-wide.png";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -35,7 +36,7 @@ const BIG: Block[] = [
 ];
 const POUCHES: Block[] = [
   { id: "pouchL", name: "Pouch besar", img: pouchImg, w: 2, h: 2, cap: 4 },
-  { id: "pouchM", name: "Pouch sedang", img: pouchImg, w: 2, h: 1, cap: 2 },
+  { id: "pouchM", name: "Pouch sedang", img: pouchWideImg, w: 2, h: 1, cap: 2 },
   { id: "pouchS", name: "Pouch kecil", img: pouchImg, w: 1, h: 1, cap: 1 },
 ];
 const SMALLS: Small[] = [
@@ -94,14 +95,29 @@ export function PackingQuest({ onWin }: { onWin: () => void }) {
   const pouchUsed = (pid: string) =>
     Object.entries(inPouch).filter(([, p]) => p === pid).reduce((s, [sid]) => s + (smallById(sid)?.units ?? 0), 0);
 
+  // Cari kotak valid TERDEKAT dari posisi lepas (bukan harus pas banget), jadi melepas di
+  // tengah / dekat engsel tetap "nempel" ke sisi yang muat.
   const dropTarget = (d: Drag) => {
     const rect = boardRef.current?.getBoundingClientRect();
     if (!rect || !blockById(d.id)) return null;
-    let relX = d.px - d.offX - rect.left;
+    const m = 10;
+    const inside = d.px >= rect.left - m && d.px <= rect.right + m && d.py >= rect.top - m && d.py <= rect.bottom + m;
+    const tlX = d.px - d.offX - rect.left;
+    const tlY = d.py - d.offY - rect.top;
+    let relX = tlX;
     if (relX > HALF * cell + gap / 2) relX -= gap;
-    const x = Math.round(relX / cell);
-    const y = Math.round((d.py - d.offY - rect.top) / cell);
-    return { x, y, ok: fits(d.id, x, y) };
+    const raw = { x: Math.round(relX / cell), y: Math.round(tlY / cell) };
+    if (!inside) return { ...raw, ok: false, inside: false };
+    let best: { x: number; y: number; dist: number } | null = null;
+    for (let x = 0; x < COLS; x++) {
+      for (let y = 0; y < ROWS; y++) {
+        if (!fits(d.id, x, y)) continue;
+        const dist = Math.hypot(colLeft(x) - tlX, y * cell - tlY);
+        if (!best || dist < best.dist) best = { x, y, dist };
+      }
+    }
+    if (best && best.dist <= cell * 1.75) return { x: best.x, y: best.y, ok: true, inside: true };
+    return { ...raw, ok: false, inside: true };
   };
 
   const startDrag = (id: string, e: React.PointerEvent) => {
@@ -144,14 +160,19 @@ export function PackingQuest({ onWin }: { onWin: () => void }) {
       if (t?.ok) {
         setPlaced({ ...placed, [d.id]: { x: t.x, y: t.y } });
         setMessage(`${blockById(d.id)?.name} masuk koper ✨`);
-      } else {
+      } else if (t?.inside) {
+        // dilepas di dalam koper tapi nggak ada tempat yang muat: barang tetap di posisi semula
+        setMessage("Belum muat di situ. Coba putar (ketuk barang) atau geser ke tempat lain ya!");
+      } else if (d.from) {
         const n = { ...placed }; delete n[d.id]; setPlaced(n);
-        if (t) setMessage(t.x >= -1 && t.y >= -1 && t.x < COLS && t.y < ROWS ? "Ups, numpuk, kepanjangan, atau nyebrang ke sisi lain. Atur ulang ya!" : `${blockById(d.id)?.name} dikeluarkan dari koper.`);
+        setMessage(`${blockById(d.id)?.name} dikeluarkan dari koper.`);
       }
     };
+    const cancel = () => setDrag(null);
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up, { once: true });
-    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointercancel", cancel, { once: true });
+    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", cancel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drag?.id, drag?.startX, drag?.startY]);
 
@@ -173,10 +194,14 @@ export function PackingQuest({ onWin }: { onWin: () => void }) {
         >
           {b.cap ? (
             <>
-              <img src={b.img} alt={b.name} draggable={false} className="absolute inset-0 h-full w-full object-fill opacity-95" />
-              <div className="absolute inset-x-[12%] bottom-[12%] top-[26%] flex flex-wrap content-center items-center justify-center gap-0.5">
+              {rotated[id] && b.w !== b.h ? (
+                <img src={b.img} alt={b.name} draggable={false} className="absolute left-1/2 top-1/2 max-w-none object-fill" style={{ width: b.w * cell, height: b.h * cell, transform: "translate(-50%,-50%) rotate(90deg)" }} />
+              ) : (
+                <img src={b.img} alt={b.name} draggable={false} className="absolute inset-0 h-full w-full object-fill" />
+              )}
+              <div className={cn("absolute flex flex-wrap content-center items-center justify-center gap-0.5", rotated[id] && b.w !== b.h ? "inset-y-[10%] left-[8%] right-[24%]" : "inset-x-[9%] bottom-[8%] top-[24%]")}>
                 {contents.map((s) => (
-                  <img key={s.id} src={s.img} alt={s.name} draggable={false} onPointerDown={(e) => { e.stopPropagation(); startDrag(s.id, e); }} className="cursor-grab object-contain opacity-90" style={{ width: cell * 0.48, height: cell * 0.48 }} />
+                  <img key={s.id} src={s.img} alt={s.name} draggable={false} onPointerDown={(e) => { e.stopPropagation(); startDrag(s.id, e); }} className="cursor-grab touch-none object-contain" style={{ width: cell * 0.48, height: cell * 0.48 }} />
                 ))}
               </div>
             </>
@@ -227,7 +252,7 @@ export function PackingQuest({ onWin }: { onWin: () => void }) {
                     <span key={i} className="h-1.5 w-2 rounded-sm bg-foreground/70" />
                   ))}
                 </div>
-                {target && blockById(drag?.id ?? "") && (
+                {target && target.inside && blockById(drag?.id ?? "") && (
                   <div
                     className={cn("pointer-events-none absolute rounded-lg border-2 border-dashed", target.ok ? "border-foreground bg-accent/40" : "border-destructive bg-destructive/20")}
                     style={{ left: colLeft(target.x), top: target.y * cell, width: dims(drag!.id).w * cell, height: dims(drag!.id).h * cell }}
