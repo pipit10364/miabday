@@ -231,7 +231,7 @@ function QuestMap({ completed, enter }: { completed: number; enter: (place: Plac
           );
         })}
         <div className="map-decoration deco-cloud"><Art name="awan" fallback="☁️" className="h-14 w-14 object-contain" /></div>
-        <div className="map-decoration deco-flower"><img src={daisyFlower} alt="" draggable={false} className="h-14 w-14 rounded-full border-2 border-foreground bg-white object-contain p-0.5" /></div>
+        <div className="map-decoration deco-flower"><img src={daisyFlower} alt="" draggable={false} className="h-16 w-16 object-contain drop-shadow-md" /></div>
         <div className="map-decoration deco-plane"><Art name="pesawat" fallback="✈" className="h-14 w-14 object-contain" /></div>
       </div>
 
