@@ -101,6 +101,7 @@
 .stop-label span { font-size:.55rem; font-weight:1000; letter-spacing:.15em; color:var(--muted-foreground); }
 .stop-label strong { font-size:1.15rem; font-weight:1000; }
 .stop-label small { margin-top:.12rem; font-size:.62rem; font-weight:800; }
+.route-svg { display:none; }
 .map-decoration { position:absolute; font-size:2rem; opacity:.8; }
 .deco-cloud { left:22%; top:12%; }.deco-flower { right:34%; bottom:8%; }.deco-plane { right:17%; top:11%; transform:rotate(14deg); }
 .progress-dot { width:2.5rem; height:.45rem; border:1px solid var(--ink); border-radius:999px; background:var(--card); }
@@ -134,6 +135,10 @@
 .maze-cell.bridge { background:repeating-linear-gradient(90deg, var(--secondary) 0 6px, color-mix(in oklab, var(--ink) 30%, var(--secondary)) 6px 8px); }
 .maze-cell.finish { background:var(--secondary); }
 .mia-bike { animation:bob .6s ease-in-out infinite alternate; }
+.maze-cell > img, .maze-cell > span { width:100%; height:100%; }
+.maze-cell > span { display:grid; place-items:center; }
+.maze-cell > span > img { width:86%; height:86%; object-fit:contain; }
+.maze-cell > img { display:block; box-sizing:border-box; padding:7%; object-fit:contain; }
 .maze-side { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; }
 .ingredient-list { display:flex; flex-wrap:wrap; justify-content:center; gap:.45rem; padding:.75rem; border:2px solid var(--ink); background:var(--sun); box-shadow:3px 3px 0 var(--ink); }
 .ingredient-list strong { width:100%; text-align:center; font-size:.6rem; letter-spacing:.12em; }.ingredient-list span { opacity:.2; font-size:1.5rem; }.ingredient-list span.found { opacity:1; }
@@ -165,11 +170,12 @@
 @keyframes confetti-fall { 0%{transform:translateY(-5vh) rotate(0);opacity:1} 100%{transform:translateY(105vh) rotate(720deg);opacity:.8} }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior:auto!important; animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; } }
 @media (max-width: 720px) {
-  .game-title { font-size:3.6rem; }
-  .quest-map { min-height:41rem; }
-  .route-line { top:45%; left:27%; width:57%; transform:rotate(74deg); }
+  .game-title { font-size:clamp(2.2rem, 12.5vw, 3.6rem); line-height:.86; overflow-wrap:normal; }
+  .quest-map { min-height:42rem; }
+  .route-line { display:none; }
+  .route-svg { display:block; position:absolute; inset:0; z-index:1; width:100%; height:100%; color:var(--ink); pointer-events:none; }
   .quest-stop { width:10.5rem; }.city-token{width:6.4rem;height:6.4rem}.city-art{font-size:2.9rem}
-  .stop-1{left:2%;bottom:4%}.stop-2{right:3%;left:auto;top:34%}.stop-3{left:5%;right:auto;top:4%;bottom:auto}
+  .stop-1{left:2%;right:auto;top:3%;bottom:auto}.stop-2{right:3%;left:auto;top:34%}.stop-3{left:3%;right:auto;top:auto;bottom:3%}
   .stop-label { padding:.45rem .6rem; }.stop-label strong{font-size:1rem}.map-decoration{display:none}
   .pipe-stage { gap:.35rem; }.pipe-grid{grid-template-columns:repeat(3,minmax(0,3.5rem));}.pipe-tile span{font-size:3rem}.pipe-end{min-width:2.6rem;font-size:1.5rem}
   .maze-wrap { grid-template-columns:1fr; gap:1.2rem; }.maze-side{flex-direction:row;flex-wrap:wrap}.maze-side small{width:100%;text-align:center}
