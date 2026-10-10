@@ -23,6 +23,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FlowerWordSearch } from "@/components/quests/FlowerWordSearch";
 import { PackingQuest } from "@/components/quests/PackingQuest";
 import { Button } from "@/components/ui/button";
+import belandaPlace from "@/assets/places/belanda.webp";
+import jakartaPlace from "@/assets/places/jakarta.webp";
+import jogjaPlace from "@/assets/places/jogja.webp";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -52,19 +55,26 @@ const STOPS: Array<{
   number: string;
   city: string;
   kicker: string;
-  icon: string;
+  photo: string;
   coords: string;
 }> = [
-  { id: "jakarta", number: "01", city: "Jakarta", kicker: "Packing Koper", icon: "🏙️", coords: "06°12′S" },
-  { id: "jogja", number: "02", city: "Jogja", kicker: "Taman Kata Bunga", icon: "🏛️", coords: "07°48′S" },
-  { id: "belanda", number: "03", city: "Belanda", kicker: "Petualangan Mandiri", icon: "🌷", coords: "50°51′N" },
+  { id: "jakarta", number: "01", city: "Jakarta", kicker: "Packing Koper", photo: jakartaPlace, coords: "06°12′S" },
+  { id: "jogja", number: "02", city: "Jogja", kicker: "Taman Kata Bunga", photo: jogjaPlace, coords: "07°48′S" },
+  { id: "belanda", number: "03", city: "Belanda", kicker: "Petualangan Mandiri", photo: belandaPlace, coords: "50°51′N" },
 ];
+
+const postcardModules = import.meta.glob<string>("../assets/postcards/*.webp", { eager: true, import: "default" });
+const photosOf = (city: string) =>
+  Object.entries(postcardModules)
+    .filter(([path]) => path.includes(`/${city}-`))
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+    .map(([, url]) => url);
 
 const POSTCARDS = [
   {
     city: "Jakarta",
     stamp: "20 OCT",
-    icon: "🌇",
+    photos: photosOf("jakarta"),
     front: "Dari kota tempat bintang ini bermula",
     letter:
       "Dear Mia, tetaplah bersinar dengan caramu sendiri—berani bicara, hangat pada semua orang, dan selalu punya ruang untuk bunga, buku, musik, serta mimpi baru. Jakarta selalu jadi halaman pertama yang indah.",
@@ -72,7 +82,7 @@ const POSTCARDS = [
   {
     city: "Yogyakarta",
     stamp: "UGM 2023",
-    icon: "🍳",
+    photos: photosOf("jogja"),
     front: "Untuk cerita yang terlalu unik jadi biasa",
     letter:
       "Dear Mia, semoga setiap kekacauan kecil—bahkan nasi goreng hijau dan spatula meleleh—selalu berubah jadi cerita yang bikin tertawa. Terus jalani apa yang sudah kamu mulai, sepenuh hati.",
@@ -80,7 +90,7 @@ const POSTCARDS = [
   {
     city: "Maastricht",
     stamp: "AIR MAIL",
-    icon: "🚲",
+    photos: photosOf("belanda"),
     front: "Jauh dari rumah, tetap membawa hangat",
     letter:
       "Dear Mia, di jalan baru yang kadang sulit, semoga kamu selalu menemukan bahan untuk rasa yang familiar, keberanian untuk terus belajar, dan alasan untuk tersenyum. Senyummu adalah rumah yang ikut bepergian.",
@@ -204,7 +214,7 @@ function QuestMap({ completed, enter }: { completed: number; enter: (place: Plac
                 onClick={() => enter(stop.id, index)}
                 aria-label={locked ? `${stop.city} terkunci` : `Mainkan pos ${stop.city}`}
               >
-                <span className="city-art" aria-hidden="true">{stop.icon}</span>
+                <img className="city-photo" src={stop.photo} alt="" draggable={false} />
                 <span className="city-status">{done ? <Check /> : locked ? <LockKeyhole /> : <MapPin />}</span>
               </button>
               <div className="stop-label">
@@ -291,27 +301,34 @@ const tile = (x: number, y: number) => MAZE_MAP[y]?.[x] ?? "#";
 
 function MazeQuest({ onBack, onWin }: { onBack: () => void; onWin: () => void }) {
   const [position, setPosition] = useState<[number, number]>([0, 0]);
-  const [safePos, setSafePos] = useState<[number, number]>([0, 0]);
+  const [crash, setCrash] = useState<[number, number] | null>(null);
+  const crashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [foods, setFoods] = useState<string[]>([]);
   const [tick, setTick] = useState(0);
-  const [note, setNote] = useState("Hati-hati sama merpati 🐦 dan kanal 🌊 — seberangi lewat jembatan!");
+  const [note, setNote] = useState("Hati-hati sama merpati 🐦, sekali tertabrak langsung ulang dari awal! Seberangi kanal 🌊 lewat jembatan.");
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 650); return () => clearInterval(id); }, []);
   const pigeonAt = (t: number) => PIGEONS.map((path) => { const n = path.length * 2 - 2; const i = t % n; return path[i < path.length ? i : n - i]; });
   const pigeons = pigeonAt(tick);
   const hit = (p: [number, number], list = pigeons) => list.some((q) => q?.[0] === p[0] && q?.[1] === p[1]);
-  const bumped = () => { setPosition(safePos); setNote("Merpati kaget! Mia mundur ke tempat aman terakhir (bahan tetap aman) 🐦"); };
+  useEffect(() => () => { if (crashTimer.current) clearTimeout(crashTimer.current); }, []);
+  const die = (at: [number, number]) => {
+    if (crash) return;
+    setCrash(at);
+    setNote("Mia tertabrak merpati! Mulai lagi dari awal 🐦💥");
+    crashTimer.current = setTimeout(() => { setPosition([0, 0]); setFoods([]); setCrash(null); }, 900);
+  };
   useEffect(() => {
-    if (hit(position) && (position[0] !== safePos[0] || position[1] !== safePos[1])) bumped();
+    if (!crash && hit(position)) die(position);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
   const move = (dx: number, dy: number) => {
+    if (crash) return;
     const next: [number, number] = [position[0] + dx, position[1] + dy];
     const t = tile(next[0], next[1]);
     if (next.some((v) => v < 0 || v >= MAZE_SIZE) || t === "#") return;
     if (t === "~") return setNote("Itu kanal! Cari jembatan 🌉");
-    if (hit(next)) { bumped(); return; }
+    if (hit(next)) { setPosition(next); die(next); return; }
     setPosition(next);
-    if (!hit(next, pigeonAt(tick + 1))) setSafePos(next);
     const key = `${next[0]},${next[1]}`;
     if (FOODS[key] && !foods.includes(key)) { setFoods([...foods, key]); setNote(`Dapat ${FOODS[key]}!`); }
     if (t === "F") { if (foods.length === 3) onWin(); else setNote("Bahannya belum lengkap, cari lagi ya!"); }
@@ -326,7 +343,7 @@ function MazeQuest({ onBack, onWin }: { onBack: () => void; onWin: () => void })
   });
   return (
     <GameShell title="Gowes Mencari Rasa" location="POS 03 • BELANDA" icon="🚲" onBack={onBack}>
-      <div className="game-copy"><span className="round-pill">MAASTRICHT MAZE</span><p>Kumpulkan nasi, ayam bakar, dan sayur, lalu antar Mia ke dapur Asia. Hindari merpati dan seberangi kanal lewat jembatan.</p></div>
+      <div className="game-copy"><span className="round-pill">MAASTRICHT MAZE</span><p>Kumpulkan nasi, ayam bakar, dan sayur, lalu antar Mia ke dapur Asia. Hindari merpati, sekali tertabrak Mia mulai lagi dari awal. Seberangi kanal lewat jembatan.</p></div>
       <div className="maze-wrap">
         <div className="maze-grid" style={{ gridTemplateColumns: `repeat(${MAZE_SIZE},1fr)` }}>
           {Array.from({ length: MAZE_SIZE * MAZE_SIZE }, (_, index) => {
@@ -337,7 +354,7 @@ function MazeQuest({ onBack, onWin }: { onBack: () => void; onWin: () => void })
             const isMia = position[0] === x && position[1] === y;
             const cls = t === "#" ? "wall" : t === "~" ? "water" : t === "=" ? "bridge" : t === "F" ? "finish" : "";
             return <div key={key} className={`maze-cell ${cls}`}>
-              {isMia ? <span className="mia-bike">🚲</span> : hit([x, y]) ? "🐦" : FOODS[key] && !foods.includes(key) ? FOODS[key] : t === "F" ? "🏠" : ""}
+              {crash && crash[0] === x && crash[1] === y ? <span className="mia-crash">💥</span> : isMia ? <span className="mia-bike">🚲</span> : hit([x, y]) ? "🐦" : FOODS[key] && !foods.includes(key) ? FOODS[key] : t === "F" ? "🏠" : ""}
             </div>;
           })}
         </div>
@@ -364,7 +381,7 @@ function PostcardCollection({ completed, onBack, onOpen }: { completed: number; 
       <div className="postcard-grid">
         {POSTCARDS.map((card, index) => (
           <button key={card.city} disabled={index >= completed} className={`postcard-preview postcard-${index + 1}`} onClick={() => onOpen(index)}>
-            {index >= completed ? <><LockKeyhole /><strong>Masih terkunci</strong><small>Selesaikan Pos {index + 1}</small></> : <><span className="postcard-stamp">{card.stamp}</span><span className="postcard-icon">{card.icon}</span><small>SALAM DARI</small><strong>{card.city}</strong><p>{card.front}</p><span className="read-card">Buka surat <ArrowRight /></span></>}
+            {index >= completed ? <><LockKeyhole /><strong>Masih terkunci</strong><small>Selesaikan Pos {index + 1}</small></> : <><span className="postcard-stamp">{card.stamp}</span><img className="postcard-thumb" src={STOPS[index]?.photo} alt="" draggable={false} /><small>SALAM DARI</small><strong>{card.city}</strong><p>{card.front}</p><span className="read-card">Buka surat <ArrowRight /></span></>}
           </button>
         ))}
       </div>
@@ -372,14 +389,24 @@ function PostcardCollection({ completed, onBack, onOpen }: { completed: number; 
   );
 }
 
+const lastPhoto: Record<string, string> = {};
+// Tiap kali kartu dibuka, ambil satu foto acak dari kota itu (tidak sama dengan foto terakhir yang keluar).
+function pickPhoto(city: string, photos: string[]) {
+  const pool = photos.length > 1 ? photos.filter((photo) => photo !== lastPhoto[city]) : photos;
+  const pick = pool[Math.floor(Math.random() * pool.length)] ?? photos[0];
+  if (pick) lastPhoto[city] = pick;
+  return pick;
+}
+
 function PostcardModal({ index, onClose, onContinue }: { index: number; onClose: () => void; onContinue: () => void }) {
   const card = POSTCARDS[index] ?? POSTCARDS[0];
+  const [photo] = useState(() => (card ? pickPhoto(card.city, card.photos) : undefined));
   if (!card) return null;
   return (
     <div className="postcard-modal" role="dialog" aria-modal="true" aria-label={`Postcard dari ${card.city}`}>
       <button className="modal-close" onClick={onClose} aria-label="Tutup"><X /></button>
       <div className={`postcard-letter postcard-${index + 1}`}>
-        <div className="letter-visual"><span className="postcard-stamp">{card.stamp}</span><span>{card.icon}</span><small>POSTCARD FROM</small><h2>{card.city}</h2></div>
+        <div className="letter-visual">{photo && <img className="letter-photo" src={photo} alt={`Foto ${card.city}`} draggable={false} />}<span className="postcard-stamp">{card.stamp}</span><small>POSTCARD FROM</small><h2>{card.city}</h2></div>
         <div className="letter-copy"><Heart fill="currentColor" /><h3>Untuk Mia,</h3><p>{card.letter}</p><strong>Happy Birthday, Mia!</strong><small>— dengan hangat, dari semua yang sayang Mia</small></div>
       </div>
       <Button className="mt-5" onClick={onContinue}>{index === 2 ? "Kembali ke Peta" : "Lanjutkan Petualangan"} <ArrowRight /></Button>
