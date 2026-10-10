@@ -4,22 +4,39 @@ import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
+import anggrek from "@/assets/flowers/anggrek.webp";
+import aster from "@/assets/flowers/aster.webp";
+import bibit from "@/assets/flowers/bibit.webp";
+import dahlia from "@/assets/flowers/dahlia.webp";
+import daisy from "@/assets/flowers/daisy.webp";
+import iris from "@/assets/flowers/iris.webp";
+import lavender from "@/assets/flowers/lavender.webp";
+import lily from "@/assets/flowers/lily.webp";
+import lotus from "@/assets/flowers/lotus.webp";
+import magnolia from "@/assets/flowers/magnolia.webp";
+import matahari from "@/assets/flowers/matahari.webp";
+import melati from "@/assets/flowers/melati.webp";
+import peony from "@/assets/flowers/peony.webp";
+import rose from "@/assets/flowers/rose.webp";
+import sakura from "@/assets/flowers/sakura.webp";
+import tulip from "@/assets/flowers/tulip.webp";
+
 const FLOWERS = [
-  { word: "MAWAR", emoji: "🌹", meaning: "Cinta & keberanian", cheer: "Kamu berani mencintai hidupmu sendiri, Mia." },
-  { word: "PEONY", emoji: "🌸", meaning: "Kebahagiaan & kemakmuran", cheer: "Semoga tahun ini penuh rezeki dan tawa." },
-  { word: "TULIP", emoji: "🌷", meaning: "Cinta yang tulus", cheer: "Hatimu yang tulus selalu kembali dengan kebaikan." },
-  { word: "MELATI", emoji: "🤍", meaning: "Kesucian & ketulusan", cheer: "Tetap jadi dirimu yang lembut dan apa adanya." },
-  { word: "ANGGREK", emoji: "🪻", meaning: "Kekuatan & keanggunan", cheer: "Kamu kuat, bahkan saat sedang lelah." },
-  { word: "LILY", emoji: "⚜️", meaning: "Kemurnian & harapan baru", cheer: "Setiap pagi adalah halaman baru untukmu." },
-  { word: "LAVENDER", emoji: "💜", meaning: "Ketenangan", cheer: "Boleh istirahat. Pelan-pelan juga tetap maju." },
-  { word: "DAISY", emoji: "🌼", meaning: "Keceriaan & awal baru", cheer: "Senyummu menular ke semua orang di sekitarmu." },
-  { word: "LOTUS", emoji: "🪷", meaning: "Bangkit dari kesulitan", cheer: "Apa pun lumpurnya, kamu selalu bisa mekar." },
-  { word: "DAHLIA", emoji: "🏵️", meaning: "Keteguhan hati", cheer: "Pegang terus mimpimu, kamu pasti sampai." },
-  { word: "MATAHARI", emoji: "🌻", meaning: "Optimisme & kesetiaan", cheer: "Kamu adalah cahaya kuning di hari-hari kami." },
-  { word: "IRIS", emoji: "💠", meaning: "Harapan & kebijaksanaan", cheer: "Percaya pada langkahmu sendiri." },
-  { word: "ASTER", emoji: "✳️", meaning: "Kesabaran", cheer: "Hal baik sedang tumbuh, meski belum terlihat." },
-  { word: "MAGNOLIA", emoji: "🌺", meaning: "Ketahanan & martabat", cheer: "Kamu jauh lebih tangguh dari yang kamu kira." },
-  { word: "SAKURA", emoji: "🌸", meaning: "Nikmati setiap momen", cheer: "Rayakan hari ini—kamu pantas bahagia!" },
+  { word: "MAWAR", img: rose, meaning: "Cinta & keberanian", cheer: "Kamu berani mencintai hidupmu sendiri, Mia." },
+  { word: "PEONY", img: peony, meaning: "Kebahagiaan & kemakmuran", cheer: "Semoga tahun ini penuh rezeki dan tawa." },
+  { word: "TULIP", img: tulip, meaning: "Cinta yang tulus", cheer: "Hatimu yang tulus selalu kembali dengan kebaikan." },
+  { word: "MELATI", img: melati, meaning: "Kesucian & ketulusan", cheer: "Tetap jadi dirimu yang lembut dan apa adanya." },
+  { word: "ANGGREK", img: anggrek, meaning: "Kekuatan & keanggunan", cheer: "Kamu kuat, bahkan saat sedang lelah." },
+  { word: "LILY", img: lily, meaning: "Kemurnian & harapan baru", cheer: "Setiap pagi adalah halaman baru untukmu." },
+  { word: "LAVENDER", img: lavender, meaning: "Ketenangan", cheer: "Boleh istirahat. Pelan-pelan juga tetap maju." },
+  { word: "DAISY", img: daisy, meaning: "Keceriaan & awal baru", cheer: "Senyummu menular ke semua orang di sekitarmu." },
+  { word: "LOTUS", img: lotus, meaning: "Bangkit dari kesulitan", cheer: "Apa pun lumpurnya, kamu selalu bisa mekar." },
+  { word: "DAHLIA", img: dahlia, meaning: "Keteguhan hati", cheer: "Pegang terus mimpimu, kamu pasti sampai." },
+  { word: "MATAHARI", img: matahari, meaning: "Optimisme & kesetiaan", cheer: "Kamu adalah cahaya kuning di hari-hari kami." },
+  { word: "IRIS", img: iris, meaning: "Harapan & kebijaksanaan", cheer: "Percaya pada langkahmu sendiri." },
+  { word: "ASTER", img: aster, meaning: "Kesabaran", cheer: "Hal baik sedang tumbuh, meski belum terlihat." },
+  { word: "MAGNOLIA", img: magnolia, meaning: "Ketahanan & martabat", cheer: "Kamu jauh lebih tangguh dari yang kamu kira." },
+  { word: "SAKURA", img: sakura, meaning: "Nikmati setiap momen", cheer: "Rayakan hari ini—kamu pantas bahagia!" },
 ];
 
 type Cell = [number, number];
@@ -160,7 +177,7 @@ export function FlowerWordSearch({ onWin, onFound }: { onWin: () => void; onFoun
               const got = found.includes(f.word);
               return (
                 <button key={f.word} disabled={!got} onClick={() => setReveal(f.word)} className={cn("rounded-xl border-2 p-2 text-center transition", got ? "border-foreground/70 bg-primary animate-in zoom-in-75" : "border-dashed border-border bg-card")}>
-                  <span className="block text-2xl">{got ? f.emoji : "🌱"}</span>
+                  <img src={got ? f.img : bibit} alt="" draggable={false} className={cn("mx-auto h-12 w-12 rounded-lg bg-white object-contain p-0.5", !got && "opacity-70")} />
                   <span className="block text-[10px] font-extrabold tracking-wider">{got ? f.word : "?".repeat(f.word.length)}</span>
                 </button>
               );
@@ -172,7 +189,7 @@ export function FlowerWordSearch({ onWin, onFound }: { onWin: () => void; onFoun
       {flower && (
         <div className="postcard-modal" role="dialog" aria-modal="true" aria-label={`Bunga ${flower.word}`}>
           <div className="w-full max-w-sm rounded-3xl border-4 border-foreground/80 bg-card p-6 text-center shadow-2xl animate-in zoom-in-90">
-            <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-secondary text-7xl animate-in spin-in-12 duration-700">{flower.emoji}</div>
+            <div className="mx-auto h-32 w-32 overflow-hidden rounded-full border-4 border-foreground/70 bg-white animate-in spin-in-12 duration-700"><img src={flower.img} alt={flower.word} draggable={false} className="h-full w-full object-contain p-1.5" /></div>
             <small className="mt-4 block text-xs font-extrabold tracking-widest text-muted-foreground">BAHASA BUNGA</small>
             <h2 className="text-3xl font-black">{flower.word}</h2>
             <p className="mt-1 font-bold text-primary-foreground"><span className="rounded-full bg-primary px-3 py-1">{flower.meaning}</span></p>
