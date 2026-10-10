@@ -177,7 +177,7 @@ export function FlowerWordSearch({ onWin, onFound }: { onWin: () => void; onFoun
               const got = found.includes(f.word);
               return (
                 <button key={f.word} disabled={!got} onClick={() => setReveal(f.word)} className={cn("rounded-xl border-2 p-2 text-center transition", got ? "border-foreground/70 bg-primary animate-in zoom-in-75" : "border-dashed border-border bg-card")}>
-                  <img src={got ? f.img : bibit} alt="" draggable={false} className={cn("mx-auto h-12 w-12 rounded-lg bg-white object-contain p-0.5", !got && "opacity-70")} />
+                  <img src={got ? f.img : bibit} alt="" draggable={false} className={cn("mx-auto h-14 w-14 object-contain drop-shadow-sm", !got && "opacity-70")} />
                   <span className="block text-[10px] font-extrabold tracking-wider">{got ? f.word : "?".repeat(f.word.length)}</span>
                 </button>
               );
@@ -189,7 +189,7 @@ export function FlowerWordSearch({ onWin, onFound }: { onWin: () => void; onFoun
       {flower && (
         <div className="postcard-modal" role="dialog" aria-modal="true" aria-label={`Bunga ${flower.word}`}>
           <div className="w-full max-w-sm rounded-3xl border-4 border-foreground/80 bg-card p-6 text-center shadow-2xl animate-in zoom-in-90">
-            <div className="mx-auto h-32 w-32 overflow-hidden rounded-full border-4 border-foreground/70 bg-white animate-in spin-in-12 duration-700"><img src={flower.img} alt={flower.word} draggable={false} className="h-full w-full object-contain p-1.5" /></div>
+            <div className="mx-auto h-40 w-40 animate-in spin-in-12 duration-700"><img src={flower.img} alt={flower.word} draggable={false} className="h-full w-full object-contain drop-shadow-lg" /></div>
             <small className="mt-4 block text-xs font-extrabold tracking-widest text-muted-foreground">BAHASA BUNGA</small>
             <h2 className="text-3xl font-black">{flower.word}</h2>
             <p className="mt-1 font-bold text-primary-foreground"><span className="rounded-full bg-primary px-3 py-1">{flower.meaning}</span></p>
