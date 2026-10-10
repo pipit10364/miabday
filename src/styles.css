@@ -88,6 +88,7 @@
 .stop-coordinate { margin-bottom:.45rem; font-size:.58rem; font-weight:900; letter-spacing:.12em; }
 .city-token { position:relative; display:grid; width:8.2rem; height:8.2rem; place-items:center; border:3px solid var(--ink); border-radius:50%; background:var(--sun); box-shadow:6px 7px 0 var(--ink); cursor:pointer; transition:transform .2s, box-shadow .2s; }
 .city-token:hover:not(:disabled) { transform:translateY(-5px) rotate(-2deg); box-shadow:8px 12px 0 var(--ink); }
+.city-photo { display:block; width:100%; height:100%; border-radius:50%; object-fit:cover; user-select:none; }
 .city-art { font-size:3.8rem; filter:drop-shadow(0 3px 0 color-mix(in oklab, var(--ink) 20%, transparent)); }
 .city-status { position:absolute; right:-.25rem; bottom:.1rem; display:grid; width:2.1rem; height:2.1rem; place-items:center; border:2px solid var(--ink); border-radius:50%; background:var(--card); }
 .city-status svg { width:1rem; }
@@ -142,12 +143,20 @@
 .postcard-preview { position:relative; display:flex; min-height:22rem; flex-direction:column; align-items:center; justify-content:center; padding:1.5rem; border:2px solid var(--ink); border-radius:5px; background:var(--card); box-shadow:6px 7px 0 var(--ink); text-align:center; cursor:pointer; transition:transform .2s; overflow:hidden; }
 .postcard-preview:hover:not(:disabled) { transform:translateY(-6px) rotate(1deg); }.postcard-preview:disabled { cursor:not-allowed; opacity:.48; filter:grayscale(1); }
 .postcard-preview::before { content:""; position:absolute; inset:0; opacity:.24; background-image:repeating-linear-gradient(45deg,transparent 0 12px,var(--primary) 12px 14px,transparent 14px 26px,var(--coral) 26px 28px); }
-.postcard-preview > * { position:relative; }.postcard-icon { font-size:5rem; }.postcard-preview > small { font-size:.6rem; font-weight:1000; letter-spacing:.16em; }.postcard-preview > strong { margin-top:.25rem; font-size:1.7rem; font-weight:1000; }.postcard-preview p { margin-top:1rem; font-size:.78rem; font-weight:700; }.postcard-stamp { position:absolute; right:1rem; top:1rem; padding:.3rem; border:2px dashed var(--ink); transform:rotate(5deg); font-size:.55rem; font-weight:1000; }
+.postcard-preview > * { position:relative; }.postcard-icon { font-size:5rem; }.postcard-thumb { display:block; width:8rem; height:8rem; border:3px solid var(--ink); border-radius:50%; object-fit:cover; box-shadow:4px 5px 0 var(--ink); }.postcard-preview > small { font-size:.6rem; font-weight:1000; letter-spacing:.16em; }.postcard-preview > strong { margin-top:.25rem; font-size:1.7rem; font-weight:1000; }.postcard-preview p { margin-top:1rem; font-size:.78rem; font-weight:700; }.postcard-stamp { position:absolute; right:1rem; top:1rem; padding:.3rem; border:2px dashed var(--ink); transform:rotate(5deg); font-size:.55rem; font-weight:1000; }
 .read-card { display:flex; align-items:center; gap:.35rem; margin-top:1.5rem; font-size:.68rem; font-weight:1000; text-transform:uppercase; }.read-card svg { width:.8rem; }
 .postcard-modal { position:fixed; z-index:60; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:1rem; background:color-mix(in oklab, var(--ink) 72%, transparent); backdrop-filter:blur(5px); }
 .modal-close { position:absolute; right:1.4rem; top:1.4rem; display:grid; width:2.6rem; height:2.6rem; place-items:center; border:2px solid var(--ink); border-radius:50%; background:var(--card); cursor:pointer; }
 .postcard-letter { display:grid; grid-template-columns:1fr 1.15fr; width:min(52rem,100%); border:3px solid var(--ink); border-radius:6px; background:var(--card); box-shadow:10px 12px 0 var(--ink); overflow:hidden; }
-.letter-visual { position:relative; display:flex; min-height:25rem; flex-direction:column; align-items:center; justify-content:center; background:var(--sun); border-right:2px solid var(--ink); text-align:center; }.letter-visual > span:not(.postcard-stamp) { font-size:6rem; }.letter-visual small { font-size:.65rem; font-weight:1000; letter-spacing:.18em; }.letter-visual h2 { font-size:2.5rem; font-weight:1000; }
+.letter-visual { position:relative; display:flex; min-height:25rem; flex-direction:column; align-items:flex-start; justify-content:flex-end; padding:1.5rem; overflow:hidden; background:var(--sun); border-right:2px solid var(--ink); color:#fff; text-align:left; }
+.letter-visual::after { content:""; position:absolute; inset:0; background:linear-gradient(to top, rgb(0 0 0 / .68), transparent 58%); pointer-events:none; }
+.letter-visual > small, .letter-visual > h2, .letter-visual > .postcard-stamp { position:relative; z-index:2; }
+.letter-visual > .postcard-stamp { position:absolute; background:var(--card); color:var(--ink); }
+.letter-photo { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 30%; animation:photo-in .8s ease both; }
+@keyframes photo-in { from { opacity:0; transform:scale(1.04); } to { opacity:1; transform:none; } }
+.mia-crash { display:inline-block; animation:crash-pop .45s ease both; }
+@keyframes crash-pop { 0% { transform:scale(.4) rotate(-20deg); } 60% { transform:scale(1.4) rotate(10deg); } 100% { transform:scale(1.1); } }
+.letter-visual small { font-size:.65rem; font-weight:1000; letter-spacing:.18em; }.letter-visual h2 { font-size:2.5rem; font-weight:1000; }
 .letter-copy { display:flex; flex-direction:column; justify-content:center; padding:2.5rem; background-image:repeating-linear-gradient(to bottom,transparent 0 31px,color-mix(in oklab,var(--blue) 18%,transparent) 31px 32px); }.letter-copy svg { width:1.3rem; color:var(--coral); }.letter-copy h3 { margin:.75rem 0; font-size:1.6rem; font-weight:1000; }.letter-copy p { font-size:.95rem; font-weight:650; line-height:2rem; }.letter-copy strong { margin-top:1rem; font-size:1.05rem; }.letter-copy small { margin-top:.35rem; color:var(--muted-foreground); }
 .confetti { position:fixed; z-index:100; inset:0; pointer-events:none; overflow:hidden; }.confetti i { position:absolute; top:-2rem; width:.7rem; height:1.1rem; background:var(--sun); animation:confetti-fall 2.8s ease-in forwards; }.confetti .confetti-1{background:var(--coral);border-radius:50%}.confetti .confetti-2{background:var(--green)}.confetti .confetti-3{background:var(--blue);border-radius:50%}
 .shake { animation:shake .35s ease-in-out; }
@@ -165,5 +174,5 @@
   .pipe-stage { gap:.35rem; }.pipe-grid{grid-template-columns:repeat(3,minmax(0,3.5rem));}.pipe-tile span{font-size:3rem}.pipe-end{min-width:2.6rem;font-size:1.5rem}
   .maze-wrap { grid-template-columns:1fr; gap:1.2rem; }.maze-side{flex-direction:row;flex-wrap:wrap}.maze-side small{width:100%;text-align:center}
   .postcard-grid { grid-template-columns:1fr; }.postcard-preview{min-height:18rem}
-  .postcard-letter { grid-template-columns:1fr; max-height:78vh; overflow:auto; }.letter-visual{min-height:12rem;border-right:0;border-bottom:2px solid var(--ink)}.letter-visual > span:not(.postcard-stamp){font-size:3.5rem}.letter-visual h2{font-size:1.8rem}.letter-copy{padding:1.5rem}
+  .postcard-letter { grid-template-columns:1fr; max-height:78vh; overflow:auto; }.letter-visual{min-height:19rem;padding:1.1rem;border-right:0;border-bottom:2px solid var(--ink)}.letter-visual h2{font-size:1.8rem}.postcard-thumb{width:6.5rem;height:6.5rem}.letter-copy{padding:1.5rem}
 }
