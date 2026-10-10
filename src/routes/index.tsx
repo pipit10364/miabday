@@ -196,7 +196,7 @@ function QuestMap({ completed, enter }: { completed: number; enter: (place: Plac
     <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-10 pt-4 sm:px-8 sm:pt-10">
       <div className="mb-8 text-center sm:mb-12">
         <div className="eyebrow"><Sparkles /> 20 OKTOBER • BIRTHDAY ADVENTURE</div>
-        <h1 className="game-title">MIA'S <span>GOLDEN</span><br />ADVENTURE</h1>
+        <h1 className="game-title">MIA'S <span className="gold">GOLDEN</span><br />ADVENTURE</h1>
         <p className="mx-auto mt-4 max-w-xl text-sm font-medium text-muted-foreground sm:text-base">
           Tiga kota, tiga tantangan, dan kejutan hangat di setiap perjalanan.
         </p>
