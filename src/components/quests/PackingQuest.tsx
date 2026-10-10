@@ -50,7 +50,11 @@ const blockById = (id: string) => BLOCKS.find((b) => b.id === id);
 const smallById = (id: string) => SMALLS.find((s) => s.id === id);
 
 type Pos = { x: number; y: number };
-type Drag = { id: string; offX: number; offY: number; px: number; py: number; startX: number; startY: number; moved: boolean; from?: Pos | undefined };
+type Drag = { id: string; offX: number; offY: number; cw: number; ch: number; lift: number; px: number; py: number; startX: number; startY: number; moved: boolean; from?: Pos | undefined };
+
+// PNG pouch sudah diberi margin transparan ~5.9% di tiap sisi supaya ritsleting tidak terpotong.
+// Gambar digambar sedikit lebih besar dari kotaknya supaya bagian pouch tetap pas di grid.
+const POUCH_PAD = { left: "-5.9%", top: "-5.9%", width: "111.8%", height: "111.8%" } as const;
 
 export function PackingQuest({ onWin }: { onWin: () => void }) {
   const isMobile = useIsMobile();
@@ -100,10 +104,13 @@ export function PackingQuest({ onWin }: { onWin: () => void }) {
   const dropTarget = (d: Drag) => {
     const rect = boardRef.current?.getBoundingClientRect();
     if (!rect || !blockById(d.id)) return null;
-    const m = 10;
-    const inside = d.px >= rect.left - m && d.px <= rect.right + m && d.py >= rect.top - m && d.py <= rect.bottom + m;
+    // Posisi barang (bukan jari): di HP barang diangkat sedikit di atas jari supaya tidak tertutup.
     const tlX = d.px - d.offX - rect.left;
-    const tlY = d.py - d.offY - rect.top;
+    const tlY = d.py - d.offY - d.lift - rect.top;
+    const cx = tlX + d.cw / 2;
+    const cy = tlY + d.ch / 2;
+    const m = cell * 0.5;
+    const inside = cx >= -m && cx <= rect.width + m && cy >= -m && cy <= rect.height + m;
     let relX = tlX;
     if (relX > HALF * cell + gap / 2) relX -= gap;
     const raw = { x: Math.round(relX / cell), y: Math.round(tlY / cell) };
@@ -116,7 +123,8 @@ export function PackingQuest({ onWin }: { onWin: () => void }) {
         if (!best || dist < best.dist) best = { x, y, dist };
       }
     }
-    if (best && best.dist <= cell * 1.75) return { x: best.x, y: best.y, ok: true, inside: true };
+    // toleransi besar: lepas di dekat engsel / di antara dua sisi tetap nempel ke tempat yang muat
+    if (best && best.dist <= cell * 2.5) return { x: best.x, y: best.y, ok: true, inside: true };
     return { ...raw, ok: false, inside: true };
   };
 
@@ -124,7 +132,7 @@ export function PackingQuest({ onWin }: { onWin: () => void }) {
     if (zipped) return;
     e.preventDefault();
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDrag({ id, offX: e.clientX - r.left, offY: e.clientY - r.top, px: e.clientX, py: e.clientY, startX: e.clientX, startY: e.clientY, moved: false, from: placed[id] });
+    setDrag({ id, offX: e.clientX - r.left, offY: e.clientY - r.top, cw: r.width, ch: r.height, lift: e.pointerType === "touch" ? 44 : 0, px: e.clientX, py: e.clientY, startX: e.clientX, startY: e.clientY, moved: false, from: placed[id] });
   };
 
   useEffect(() => {
@@ -144,7 +152,9 @@ export function PackingQuest({ onWin }: { onWin: () => void }) {
         setRotated({ ...rotated, [d.id]: rot });
         return;
       }
-      const under = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-pouch]");
+      const gx = e.clientX - d.offX + d.cw / 2;
+      const gy = e.clientY - d.offY - d.lift + d.ch / 2;
+      const under = (document.elementFromPoint(gx, gy) ?? document.elementFromPoint(e.clientX, e.clientY))?.closest<HTMLElement>("[data-pouch]");
       const pouchId = under?.dataset["pouch"];
       if (small) {
         if (!pouchId) return setMessage("Barang kecil harus masuk pouch transparan dulu ya.");
@@ -195,9 +205,9 @@ export function PackingQuest({ onWin }: { onWin: () => void }) {
           {b.cap ? (
             <>
               {rotated[id] && b.w !== b.h ? (
-                <img src={b.img} alt={b.name} draggable={false} className="absolute left-1/2 top-1/2 max-w-none object-fill" style={{ width: b.w * cell, height: b.h * cell, transform: "translate(-50%,-50%) rotate(90deg)" }} />
+                <img src={b.img} alt={b.name} draggable={false} className="absolute left-1/2 top-1/2 max-w-none object-fill" style={{ width: b.w * cell * 1.118, height: b.h * cell * 1.118, transform: "translate(-50%,-50%) rotate(90deg)" }} />
               ) : (
-                <img src={b.img} alt={b.name} draggable={false} className="absolute inset-0 h-full w-full object-fill" />
+                <img src={b.img} alt={b.name} draggable={false} className="absolute max-w-none object-fill" style={POUCH_PAD} />
               )}
               <div className={cn("absolute flex flex-wrap content-center items-center justify-center gap-0.5", rotated[id] && b.w !== b.h ? "inset-y-[10%] left-[8%] right-[24%]" : "inset-x-[9%] bottom-[8%] top-[24%]")}>
                 {contents.map((s) => (
@@ -312,7 +322,7 @@ export function PackingQuest({ onWin }: { onWin: () => void }) {
       </div>
 
       {drag?.moved && (
-        <div className="pointer-events-none fixed z-50 rotate-2 scale-105 opacity-90" style={{ left: drag.px - drag.offX, top: drag.py - drag.offY }}>
+        <div className="pointer-events-none fixed z-50 rotate-2 scale-105 opacity-90" style={{ left: drag.px - drag.offX, top: drag.py - drag.offY - drag.lift }}>
           {art(drag.id, true)}
         </div>
       )}
