@@ -5,7 +5,7 @@ export const MAX_USN = 12;
 export const LEADERBOARD_DELAY_MS = 5000;
 // Isi dengan URL Realtime Database Firebase, contoh: "https://nama-project-default-rtdb.firebaseio.com"
 // Kalau dikosongkan, leaderboard hanya tersimpan di perangkat ini.
-export const FIREBASE_DB_URL = "";
+export const FIREBASE_DB_URL = "https://miabday-d43d1-default-rtdb.asia-southeast1.firebasedatabase.app";
 
 const K = {
   usn: "mia-golden-usn",
