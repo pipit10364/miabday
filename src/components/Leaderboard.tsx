@@ -1,14 +1,16 @@
 import { Trophy } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { type Entry, fetchBoard, formatTime, sameName } from "@/lib/player";
 
-const TOP = 10;
+const TOP = 100;
+const rankLabel = (index: number) => (index >= TOP ? `${TOP}+` : String(index + 1));
 const medal = (rank: number) => (rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : String(rank));
 
 export function Leaderboard({ me, myMs, onClose }: { me: string; myMs: number | null; onClose: () => void }) {
   const [board, setBoard] = useState<{ entries: Entry[]; online: boolean } | null>(null);
+  const meRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -19,6 +21,11 @@ export function Leaderboard({ me, myMs, onClose }: { me: string; myMs: number | 
       alive = false;
     };
   }, []);
+
+  // Daftar panjang: langsung gulung ke baris pemain sendiri.
+  useEffect(() => {
+    if (board) meRef.current?.scrollIntoView?.({ block: "center" });
+  }, [board]);
 
   const entries = board?.entries ?? [];
   const myIndex = entries.findIndex((e) => sameName(e.name, me));
@@ -37,14 +44,14 @@ export function Leaderboard({ me, myMs, onClose }: { me: string; myMs: number | 
         {myMs !== null && (
           <p className="board-me">
             Waktumu {formatTime(myMs)}
-            {myIndex >= 0 ? ` • Peringkat #${myIndex + 1}` : ""}
+            {myIndex >= 0 ? ` • Peringkat ${myIndex >= TOP ? `${TOP}+` : `#${myIndex + 1}`}` : ""}
           </p>
         )}
         <div className="board-list">
           {!board && <p className="board-note">Memuat peringkat…</p>}
           {board && rows.length === 0 && <p className="board-note">Belum ada yang finis. Kamu yang pertama!</p>}
           {rows.map((entry, i) => (
-            <div key={entry.name} className={`board-row ${sameName(entry.name, me) ? "me" : ""}`}>
+            <div key={entry.name} ref={sameName(entry.name, me) ? meRef : undefined} className={`board-row ${sameName(entry.name, me) ? "me" : ""}`}>
               <span className="board-rank">{medal(i + 1)}</span>
               <span className="board-name">@{entry.name}</span>
               <span className="board-time">{formatTime(entry.ms)}</span>
@@ -53,8 +60,8 @@ export function Leaderboard({ me, myMs, onClose }: { me: string; myMs: number | 
           {outside && (
             <>
               <p className="board-gap">⋯</p>
-              <div className="board-row me">
-                <span className="board-rank">{myIndex + 1}</span>
+              <div ref={meRef} className="board-row me">
+                <span className="board-rank">{rankLabel(myIndex)}</span>
                 <span className="board-name">@{outside.name}</span>
                 <span className="board-time">{formatTime(outside.ms)}</span>
               </div>
