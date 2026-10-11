@@ -86,9 +86,9 @@ const keyOf = (name: string) => name.toLowerCase().replace(/\./g, ",");
 // Bisa juga diisi lewat environment variable VITE_FIREBASE_DB_URL di Vercel.
 const dbUrl = () => String(import.meta.env["VITE_FIREBASE_DB_URL"] ?? FIREBASE_DB_URL).replace(/\/+$/, "");
 
-async function request(path: string, init?: RequestInit): Promise<unknown> {
+async function request(path: string, init?: RequestInit, timeoutMs = 8000): Promise<unknown> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(`${dbUrl()}${path}`, { ...init, signal: controller.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -153,5 +153,30 @@ export async function fetchBoard(): Promise<{ entries: Entry[]; online: boolean 
     return { entries: sortBoard(entries), online: true };
   } catch {
     return { entries: sortBoard(readLocal()), online: false };
+  }
+}
+
+/* ---------- Username sudah dipakai? ---------- */
+
+// Cek apakah username sudah terdaftar (sudah pernah masuk atau sudah punya skor).
+// Kalau Firebase tidak terjangkau, anggap belum dipakai supaya pemain tidak tertahan di layar awal.
+export async function checkName(name: string): Promise<{ taken: boolean; ms: number | null }> {
+  if (!dbUrl()) return { taken: false, ms: null };
+  const key = encodeURIComponent(keyOf(name));
+  const [player, score] = await Promise.allSettled([
+    request(`/players/${key}.json`, undefined, 5000),
+    request(`/leaderboard/${key}.json`, undefined, 5000),
+  ]);
+  const playerData = player.status === "fulfilled" ? player.value : null;
+  const scoreData = score.status === "fulfilled" ? score.value : null;
+  return { taken: playerData !== null || scoreData !== null, ms: isEntry(scoreData) ? scoreData.ms : null };
+}
+
+export async function registerName(name: string): Promise<void> {
+  if (!dbUrl()) return;
+  try {
+    await request(`/players/${encodeURIComponent(keyOf(name))}.json`, { method: "PUT", body: JSON.stringify({ name, at: Date.now() }) }, 5000);
+  } catch {
+    // tidak fatal: game tetap bisa dimainkan
   }
 }
