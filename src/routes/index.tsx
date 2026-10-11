@@ -14,16 +14,32 @@ import {
   MapPin,
   Sparkles,
   Star,
+  Timer,
+  Trophy,
   Volume2,
   VolumeX,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Art } from "@/components/GameArt";
+import { EntryGate } from "@/components/EntryGate";
+import { Leaderboard } from "@/components/Leaderboard";
 import { FlowerWordSearch } from "@/components/quests/FlowerWordSearch";
 import { PackingQuest } from "@/components/quests/PackingQuest";
 import { Button } from "@/components/ui/button";
+import {
+  LEADERBOARD_DELAY_MS,
+  clearPlayer,
+  formatTime,
+  loadSaved,
+  saveBoardSeen,
+  saveCompleted,
+  saveFinalMs,
+  savePlayMs,
+  startPlayer,
+  submitScore,
+} from "@/lib/player";
 import belandaPlace from "@/assets/places/belanda.webp";
 import jakartaPlace from "@/assets/places/jakarta.webp";
 import jogjaPlace from "@/assets/places/jogja.webp";
@@ -105,12 +121,48 @@ function BirthdayQuest() {
   const [muted, setMuted] = useState(false);
   const [openedCard, setOpenedCard] = useState<number | null>(null);
   const [celebrating, setCelebrating] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [usn, setUsn] = useState<string | null>(null);
+  const [finalMs, setFinalMs] = useState<number | null>(null);
+  const [boardSeen, setBoardSeen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
   const audioRef = useRef<AudioContext | null>(null);
+  const playMsRef = useRef(0);
+  const flushRef = useRef<() => void>(() => {});
+  const boardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const getMs = useCallback(() => playMsRef.current, []);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("mia-golden-quest");
-    if (saved) setCompleted(Math.min(3, Number(saved) || 0));
+    const saved = loadSaved();
+    setUsn(saved.usn);
+    setCompleted(saved.completed);
+    setFinalMs(saved.finalMs);
+    setBoardSeen(saved.boardSeen);
+    playMsRef.current = saved.playMs;
+    setReady(true);
+    return () => { if (boardTimer.current) clearTimeout(boardTimer.current); };
   }, []);
+
+  // Stopwatch: hanya berjalan saat Mia sedang di dalam pos dan tab terlihat.
+  const inQuest = view === "jakarta" || view === "jogja" || view === "belanda";
+  const playing = inQuest && finalMs === null && openedCard === null && !boardOpen;
+  useEffect(() => {
+    if (!playing) return;
+    let last = Date.now();
+    const flush = () => {
+      const now = Date.now();
+      if (!document.hidden) playMsRef.current += now - last;
+      last = now;
+      savePlayMs(playMsRef.current);
+    };
+    flushRef.current = flush;
+    const id = setInterval(flush, 500);
+    return () => {
+      clearInterval(id);
+      flush();
+      flushRef.current = () => {};
+    };
+  }, [playing]);
 
   const sound = (kind: "tap" | "win") => {
     if (muted) return;
@@ -136,7 +188,14 @@ function BirthdayQuest() {
   const finishQuest = (index: number) => {
     const next = Math.max(completed, index + 1);
     setCompleted(next);
-    window.localStorage.setItem("mia-golden-quest", String(next));
+    saveCompleted(next);
+    if (next === 3 && finalMs === null && usn) {
+      flushRef.current();
+      const ms = Math.max(1000, Math.round(playMsRef.current));
+      setFinalMs(ms);
+      saveFinalMs(ms);
+      void submitScore({ name: usn, ms, at: Date.now() });
+    }
     sound("win");
     setCelebrating(true);
     setOpenedCard(index);
@@ -149,6 +208,51 @@ function BirthdayQuest() {
     setView(place);
   };
 
+  // Postcard terakhir ditutup untuk pertama kali: 5 detik kemudian stage leaderboard muncul.
+  const closeCard = (toMap: boolean) => {
+    const firstFinish = openedCard === 2 && finalMs !== null && !boardSeen;
+    setOpenedCard(null);
+    if (toMap) setView("map");
+    if (firstFinish) {
+      setBoardSeen(true);
+      saveBoardSeen();
+      boardTimer.current = setTimeout(() => setBoardOpen(true), LEADERBOARD_DELAY_MS);
+    }
+  };
+
+  const beginPlayer = (name: string) => {
+    startPlayer(name);
+    playMsRef.current = 0;
+    setUsn(name);
+    setCompleted(0);
+    setFinalMs(null);
+    setBoardSeen(false);
+    setView("map");
+  };
+
+  const switchPlayer = () => {
+    if (!window.confirm("Ganti pemain? Progres dan waktu pemain ini akan direset.")) return;
+    if (boardTimer.current) clearTimeout(boardTimer.current);
+    clearPlayer();
+    playMsRef.current = 0;
+    setUsn(null);
+    setCompleted(0);
+    setFinalMs(null);
+    setBoardSeen(false);
+    setBoardOpen(false);
+    setView("map");
+  };
+
+  if (!ready) return <main className="min-h-dvh bg-background" />;
+  if (!usn) {
+    return (
+      <main className="relative min-h-dvh overflow-hidden bg-background text-foreground">
+        <div className="sun-grid pointer-events-none absolute inset-0" />
+        <EntryGate onEnter={beginPlayer} />
+      </main>
+    );
+  }
+
   return (
     <main className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       <div className="sun-grid pointer-events-none absolute inset-0" />
@@ -158,7 +262,8 @@ function BirthdayQuest() {
           <span className="brand-star"><Star fill="currentColor" /></span>
           <span><strong>MIA'S</strong><small>GOLDEN QUEST</small></span>
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {inQuest && finalMs === null && <TimerChip getMs={getMs} />}
           <button
             className="sound-button"
             onClick={() => setMuted((value) => !value)}
@@ -174,7 +279,13 @@ function BirthdayQuest() {
         </div>
       </header>
 
-      {view === "map" && <QuestMap completed={completed} enter={enter} />}
+      {view === "map" && (
+        <QuestMap
+          completed={completed}
+          enter={enter}
+          hud={<Dashboard usn={usn} completed={completed} ms={finalMs ?? playMsRef.current} finished={finalMs !== null} onBoard={() => setBoardOpen(true)} onSwitch={switchPlayer} />}
+        />
+      )}
       {view === "jakarta" && <JakartaQuest onBack={() => setView("map")} onWin={() => finishQuest(0)} />}
       {view === "jogja" && <JogjaQuest onBack={() => setView("map")} onWin={() => finishQuest(1)} onFound={() => sound("tap")} />}
       {view === "belanda" && <MazeQuest onBack={() => setView("map")} onWin={() => finishQuest(2)} />}
@@ -182,16 +293,14 @@ function BirthdayQuest() {
         <PostcardCollection completed={completed} onBack={() => setView("map")} onOpen={setOpenedCard} />
       )}
       {openedCard !== null && (
-        <PostcardModal index={openedCard} onClose={() => setOpenedCard(null)} onContinue={() => {
-          setOpenedCard(null);
-          setView("map");
-        }} />
+        <PostcardModal index={openedCard} onClose={() => closeCard(false)} onContinue={() => closeCard(true)} />
       )}
+      {boardOpen && <Leaderboard me={usn} myMs={finalMs} onClose={() => setBoardOpen(false)} />}
     </main>
   );
 }
 
-function QuestMap({ completed, enter }: { completed: number; enter: (place: Place, index: number) => void }) {
+function QuestMap({ completed, enter, hud }: { completed: number; enter: (place: Place, index: number) => void; hud: React.ReactNode }) {
   return (
     <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-10 pt-4 sm:px-8 sm:pt-10">
       <div className="mb-8 text-center sm:mb-12">
@@ -201,6 +310,7 @@ function QuestMap({ completed, enter }: { completed: number; enter: (place: Plac
           Tiga kota, tiga tantangan, dan kejutan hangat di setiap perjalanan.
         </p>
       </div>
+      {hud}
 
       <div className="quest-map" aria-label="Peta petualangan">
         <div className="route-line" />
@@ -243,6 +353,30 @@ function QuestMap({ completed, enter }: { completed: number; enter: (place: Plac
         <span>{completed}/3 POSTCARD</span>
       </div>
     </section>
+  );
+}
+
+function TimerChip({ getMs }: { getMs: () => number }) {
+  const [ms, setMs] = useState(getMs());
+  useEffect(() => {
+    const id = setInterval(() => setMs(getMs()), 500);
+    return () => clearInterval(id);
+  }, [getMs]);
+  return <span className="timer-chip" aria-label="Waktu bermain"><Timer />{formatTime(ms)}</span>;
+}
+
+function Dashboard({ usn, completed, ms, finished, onBoard, onSwitch }: { usn: string; completed: number; ms: number; finished: boolean; onBoard: () => void; onSwitch: () => void }) {
+  return (
+    <div className="hud">
+      <span className="hud-avatar" aria-hidden="true">{usn.charAt(0).toUpperCase()}</span>
+      <div className="hud-name"><small>PEMAIN</small><strong>@{usn}</strong></div>
+      <div className="hud-stat"><small>WAKTU</small><strong>{formatTime(ms)}</strong></div>
+      <div className="hud-stat"><small>POS</small><strong>{completed}/3</strong></div>
+      <div className="hud-actions">
+        {finished && <button className="hud-btn" onClick={onBoard} aria-label="Lihat leaderboard" title="Leaderboard"><Trophy /></button>}
+        <button className="hud-btn hud-switch" onClick={onSwitch}>GANTI</button>
+      </div>
+    </div>
   );
 }
 
