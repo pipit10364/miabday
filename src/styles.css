@@ -198,6 +198,9 @@
 .gate-field input { min-width:0; flex:1; padding:.8rem .7rem .8rem .2rem; background:transparent; font-size:1.1rem; font-weight:900; outline:none; }
 .gate-field:focus-within { box-shadow:0 0 0 3px color-mix(in oklab, var(--primary) 55%, transparent); }
 .gate-hint { margin-top:.6rem; font-size:.74rem; font-weight:600; line-height:1.4; color:var(--muted-foreground); }
+.gate-card .gate-kicker { font-size:.62rem; font-weight:1000; letter-spacing:.14em; }
+.gate-confirm { margin-top:.6rem; font-size:.92rem; font-weight:700; line-height:1.5; }
+.gate-actions { display:grid; gap:.6rem; margin-top:1rem; }
 .hud { display:flex; align-items:center; gap:.9rem; max-width:36rem; margin:0 auto 1.6rem; padding:.7rem .9rem; border:2px solid var(--ink); border-radius:12px; background:var(--card); box-shadow:4px 4px 0 var(--ink); }
 .hud-avatar { display:grid; flex:none; width:2.6rem; height:2.6rem; place-items:center; border:2px solid var(--ink); border-radius:50%; background:var(--sun); font-weight:1000; }
 .hud-name { min-width:0; flex:1; text-align:left; }
@@ -221,7 +224,7 @@
 .board-row { display:flex; align-items:center; gap:.7rem; padding:.6rem .7rem; border-radius:6px; }
 .board-row + .board-row { margin-top:.3rem; }
 .board-row.me { background:var(--secondary); outline:2px solid var(--ink); }
-.board-rank { width:2rem; flex:none; text-align:center; font-weight:1000; }
+.board-rank { min-width:2.7rem; flex:none; text-align:center; font-weight:1000; font-variant-numeric:tabular-nums; }
 .board-name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:900; }
 .board-time { flex:none; font-weight:1000; font-variant-numeric:tabular-nums; }
 .board-gap { text-align:center; font-weight:1000; color:var(--muted-foreground); }
