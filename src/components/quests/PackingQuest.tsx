@@ -233,12 +233,25 @@ export function PackingQuest({ onWin }: { onWin: () => void }) {
 
   const draggingId = drag?.moved ? drag.id : null;
 
+  // Setelah diresletingkan: daftar barang hilang, hanya koper di layar.
+  // Koper tampil membesar lalu menyusut perlahan ke ukuran semula.
+  if (zipped) {
+    return (
+      <div className="mt-6 flex min-h-[62vh] select-none flex-col items-center justify-center px-2 pb-6">
+        <div className="packed-zoom">
+          <ClosedSuitcase />
+        </div>
+        <Button className="packed-cta mt-7" size="lg" onClick={onWin}>Berangkat! ✈️</Button>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-6 select-none px-2 pb-2 sm:px-6">
       <div className="grid gap-8 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-start">
         {/* Suitcase */}
         <div className="mx-auto flex flex-col items-center">
-          {zipped ? <ClosedSuitcase /> : (
+          {(
           <div className="relative mt-2">
             <div className="relative rounded-[28px] border-4 border-foreground/85 bg-primary p-3 shadow-[0_10px_0_var(--foreground)]">
               <div className="pointer-events-none absolute inset-1.5 rounded-[22px] border-2 border-dashed border-foreground/40" />
@@ -311,12 +324,8 @@ export function PackingQuest({ onWin }: { onWin: () => void }) {
             ))}
           </Shelf>
           <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-            <Button variant="secondary" onClick={reset} disabled={zipped}>Bongkar semua</Button>
-            {!zipped ? (
-              <Button disabled={!allDone} onClick={() => setZipped(true)}>Resleting koper <Sparkles /></Button>
-            ) : (
-              <Button onClick={onWin}>Berangkat! ✈️</Button>
-            )}
+            <Button variant="secondary" onClick={reset}>Bongkar semua</Button>
+            <Button disabled={!allDone} onClick={() => setZipped(true)}>Resleting koper <Sparkles /></Button>
           </div>
         </div>
       </div>
@@ -341,7 +350,7 @@ function Shelf({ title, children }: { title: string; children: React.ReactNode }
 
 function ClosedSuitcase() {
   return (
-    <div className="relative mt-2 flex flex-col items-center animate-in zoom-in-75 fade-in duration-700">
+    <div className="relative mt-2 flex flex-col items-center">
       {/* telescopic handle */}
       <div className="relative h-24 w-28 animate-in slide-in-from-bottom-8 duration-1000">
         <div className="absolute inset-x-0 top-0 h-5 rounded-t-xl border-4 border-foreground/85 bg-foreground/80" />
