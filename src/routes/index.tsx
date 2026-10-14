@@ -14,36 +14,15 @@ import {
   MapPin,
   Sparkles,
   Star,
-  Timer,
-  Trophy,
   Volume2,
   VolumeX,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Art } from "@/components/GameArt";
-import { EntryGate } from "@/components/EntryGate";
-import { Leaderboard } from "@/components/Leaderboard";
 import { FlowerWordSearch } from "@/components/quests/FlowerWordSearch";
 import { PackingQuest } from "@/components/quests/PackingQuest";
 import { Button } from "@/components/ui/button";
-import {
-  LEADERBOARD_DELAY_MS,
-  clearPlayer,
-  formatTime,
-  loadSaved,
-  saveBoardSeen,
-  saveCompleted,
-  saveFinalMs,
-  savePlayMs,
-  startPlayer,
-  submitScore,
-} from "@/lib/player";
-import belandaPlace from "@/assets/places/belanda.webp";
-import jakartaPlace from "@/assets/places/jakarta.webp";
-import jogjaPlace from "@/assets/places/jogja.webp";
-import daisyFlower from "@/assets/flowers/daisy.webp";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -73,26 +52,19 @@ const STOPS: Array<{
   number: string;
   city: string;
   kicker: string;
-  photo: string;
+  icon: string;
   coords: string;
 }> = [
-  { id: "jakarta", number: "01", city: "Jakarta", kicker: "Packing Koper", photo: jakartaPlace, coords: "06°12′S" },
-  { id: "jogja", number: "02", city: "Jogja", kicker: "Taman Kata Bunga", photo: jogjaPlace, coords: "07°48′S" },
-  { id: "belanda", number: "03", city: "Belanda", kicker: "Petualangan Mandiri", photo: belandaPlace, coords: "50°51′N" },
+  { id: "jakarta", number: "01", city: "Jakarta", kicker: "Packing Koper", icon: "🏙️", coords: "06°12′S" },
+  { id: "jogja", number: "02", city: "Jogja", kicker: "Taman Kata Bunga", icon: "🏛️", coords: "07°48′S" },
+  { id: "belanda", number: "03", city: "Belanda", kicker: "Petualangan Mandiri", icon: "🌷", coords: "50°51′N" },
 ];
-
-const postcardModules = import.meta.glob<string>("../assets/postcards/*.webp", { eager: true, import: "default" });
-const photosOf = (city: string) =>
-  Object.entries(postcardModules)
-    .filter(([path]) => path.includes(`/${city}-`))
-    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
-    .map(([, url]) => url);
 
 const POSTCARDS = [
   {
     city: "Jakarta",
     stamp: "20 OCT",
-    photos: photosOf("jakarta"),
+    icon: "🌇",
     front: "Dari kota tempat bintang ini bermula",
     letter:
       "Dear Mia, tetaplah bersinar dengan caramu sendiri—berani bicara, hangat pada semua orang, dan selalu punya ruang untuk bunga, buku, musik, serta mimpi baru. Jakarta selalu jadi halaman pertama yang indah.",
@@ -100,7 +72,7 @@ const POSTCARDS = [
   {
     city: "Yogyakarta",
     stamp: "UGM 2023",
-    photos: photosOf("jogja"),
+    icon: "🍳",
     front: "Untuk cerita yang terlalu unik jadi biasa",
     letter:
       "Dear Mia, semoga setiap kekacauan kecil—bahkan nasi goreng hijau dan spatula meleleh—selalu berubah jadi cerita yang bikin tertawa. Terus jalani apa yang sudah kamu mulai, sepenuh hati.",
@@ -108,7 +80,7 @@ const POSTCARDS = [
   {
     city: "Maastricht",
     stamp: "AIR MAIL",
-    photos: photosOf("belanda"),
+    icon: "🚲",
     front: "Jauh dari rumah, tetap membawa hangat",
     letter:
       "Dear Mia, di jalan baru yang kadang sulit, semoga kamu selalu menemukan bahan untuk rasa yang familiar, keberanian untuk terus belajar, dan alasan untuk tersenyum. Senyummu adalah rumah yang ikut bepergian.",
@@ -121,48 +93,12 @@ function BirthdayQuest() {
   const [muted, setMuted] = useState(false);
   const [openedCard, setOpenedCard] = useState<number | null>(null);
   const [celebrating, setCelebrating] = useState(false);
-  const [ready, setReady] = useState(false);
-  const [usn, setUsn] = useState<string | null>(null);
-  const [finalMs, setFinalMs] = useState<number | null>(null);
-  const [boardSeen, setBoardSeen] = useState(false);
-  const [boardOpen, setBoardOpen] = useState(false);
   const audioRef = useRef<AudioContext | null>(null);
-  const playMsRef = useRef(0);
-  const flushRef = useRef<() => void>(() => {});
-  const boardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const getMs = useCallback(() => playMsRef.current, []);
 
   useEffect(() => {
-    const saved = loadSaved();
-    setUsn(saved.usn);
-    setCompleted(saved.completed);
-    setFinalMs(saved.finalMs);
-    setBoardSeen(saved.boardSeen);
-    playMsRef.current = saved.playMs;
-    setReady(true);
-    return () => { if (boardTimer.current) clearTimeout(boardTimer.current); };
+    const saved = window.localStorage.getItem("mia-golden-quest");
+    if (saved) setCompleted(Math.min(3, Number(saved) || 0));
   }, []);
-
-  // Stopwatch: hanya berjalan saat Mia sedang di dalam pos dan tab terlihat.
-  const inQuest = view === "jakarta" || view === "jogja" || view === "belanda";
-  const playing = inQuest && finalMs === null && openedCard === null && !boardOpen;
-  useEffect(() => {
-    if (!playing) return;
-    let last = Date.now();
-    const flush = () => {
-      const now = Date.now();
-      if (!document.hidden) playMsRef.current += now - last;
-      last = now;
-      savePlayMs(playMsRef.current);
-    };
-    flushRef.current = flush;
-    const id = setInterval(flush, 500);
-    return () => {
-      clearInterval(id);
-      flush();
-      flushRef.current = () => {};
-    };
-  }, [playing]);
 
   const sound = (kind: "tap" | "win") => {
     if (muted) return;
@@ -188,14 +124,7 @@ function BirthdayQuest() {
   const finishQuest = (index: number) => {
     const next = Math.max(completed, index + 1);
     setCompleted(next);
-    saveCompleted(next);
-    if (next === 3 && finalMs === null && usn) {
-      flushRef.current();
-      const ms = Math.max(1000, Math.round(playMsRef.current));
-      setFinalMs(ms);
-      saveFinalMs(ms);
-      void submitScore({ name: usn, ms, at: Date.now() });
-    }
+    window.localStorage.setItem("mia-golden-quest", String(next));
     sound("win");
     setCelebrating(true);
     setOpenedCard(index);
@@ -208,51 +137,6 @@ function BirthdayQuest() {
     setView(place);
   };
 
-  // Postcard terakhir ditutup untuk pertama kali: 5 detik kemudian stage leaderboard muncul.
-  const closeCard = (toMap: boolean) => {
-    const firstFinish = openedCard === 2 && finalMs !== null && !boardSeen;
-    setOpenedCard(null);
-    if (toMap) setView("map");
-    if (firstFinish) {
-      setBoardSeen(true);
-      saveBoardSeen();
-      boardTimer.current = setTimeout(() => setBoardOpen(true), LEADERBOARD_DELAY_MS);
-    }
-  };
-
-  const beginPlayer = (name: string) => {
-    startPlayer(name);
-    playMsRef.current = 0;
-    setUsn(name);
-    setCompleted(0);
-    setFinalMs(null);
-    setBoardSeen(false);
-    setView("map");
-  };
-
-  const switchPlayer = () => {
-    if (!window.confirm("Ganti pemain? Progres dan waktu pemain ini akan direset.")) return;
-    if (boardTimer.current) clearTimeout(boardTimer.current);
-    clearPlayer();
-    playMsRef.current = 0;
-    setUsn(null);
-    setCompleted(0);
-    setFinalMs(null);
-    setBoardSeen(false);
-    setBoardOpen(false);
-    setView("map");
-  };
-
-  if (!ready) return <main className="min-h-dvh bg-background" />;
-  if (!usn) {
-    return (
-      <main className="relative min-h-dvh overflow-hidden bg-background text-foreground">
-        <div className="sun-grid pointer-events-none absolute inset-0" />
-        <EntryGate onEnter={beginPlayer} />
-      </main>
-    );
-  }
-
   return (
     <main className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       <div className="sun-grid pointer-events-none absolute inset-0" />
@@ -262,8 +146,7 @@ function BirthdayQuest() {
           <span className="brand-star"><Star fill="currentColor" /></span>
           <span><strong>MIA'S</strong><small>GOLDEN QUEST</small></span>
         </button>
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {inQuest && finalMs === null && <TimerChip getMs={getMs} />}
+        <div className="flex items-center gap-2">
           <button
             className="sound-button"
             onClick={() => setMuted((value) => !value)}
@@ -279,55 +162,36 @@ function BirthdayQuest() {
         </div>
       </header>
 
-      {view === "map" && (
-        <QuestMap
-          completed={completed}
-          enter={enter}
-          hud={<Dashboard usn={usn} completed={completed} ms={finalMs ?? playMsRef.current} finished={finalMs !== null} onBoard={() => setBoardOpen(true)} onSwitch={switchPlayer} />}
-        />
-      )}
-      {view === "jakarta" && (
-        <JakartaQuest
-          onBack={() => setView("map")}
-          onWin={() => finishQuest(0)}
-          usn={usn}
-          onPenalty={(ms) => {
-            if (finalMs !== null) return; // main ulang setelah selesai tidak mengubah waktu
-            playMsRef.current += ms;
-            savePlayMs(playMsRef.current);
-          }}
-        />
-      )}
+      {view === "map" && <QuestMap completed={completed} enter={enter} />}
+      {view === "jakarta" && <JakartaQuest onBack={() => setView("map")} onWin={() => finishQuest(0)} />}
       {view === "jogja" && <JogjaQuest onBack={() => setView("map")} onWin={() => finishQuest(1)} onFound={() => sound("tap")} />}
       {view === "belanda" && <MazeQuest onBack={() => setView("map")} onWin={() => finishQuest(2)} />}
       {view === "postcards" && (
         <PostcardCollection completed={completed} onBack={() => setView("map")} onOpen={setOpenedCard} />
       )}
       {openedCard !== null && (
-        <PostcardModal index={openedCard} onClose={() => closeCard(false)} onContinue={() => closeCard(true)} />
+        <PostcardModal index={openedCard} onClose={() => setOpenedCard(null)} onContinue={() => {
+          setOpenedCard(null);
+          setView("map");
+        }} />
       )}
-      {boardOpen && <Leaderboard me={usn} myMs={finalMs} onClose={() => setBoardOpen(false)} />}
     </main>
   );
 }
 
-function QuestMap({ completed, enter, hud }: { completed: number; enter: (place: Place, index: number) => void; hud: React.ReactNode }) {
+function QuestMap({ completed, enter }: { completed: number; enter: (place: Place, index: number) => void }) {
   return (
     <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-10 pt-4 sm:px-8 sm:pt-10">
       <div className="mb-8 text-center sm:mb-12">
         <div className="eyebrow"><Sparkles /> 20 OKTOBER • BIRTHDAY ADVENTURE</div>
-        <h1 className="game-title">MIA'S <span className="gold">GOLDEN</span><br />ADVENTURE</h1>
+        <h1 className="game-title">MIA'S <span>GOLDEN</span><br />ADVENTURE</h1>
         <p className="mx-auto mt-4 max-w-xl text-sm font-medium text-muted-foreground sm:text-base">
           Tiga kota, tiga tantangan, dan kejutan hangat di setiap perjalanan.
         </p>
       </div>
-      {hud}
 
       <div className="quest-map" aria-label="Peta petualangan">
         <div className="route-line" />
-        <svg className="route-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M26 15 C 62 15, 40 46, 72 46 S 40 77, 27 77" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray="9 8" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        </svg>
         {STOPS.map((stop, index) => {
           const locked = index > completed;
           const done = index < completed;
@@ -340,7 +204,7 @@ function QuestMap({ completed, enter, hud }: { completed: number; enter: (place:
                 onClick={() => enter(stop.id, index)}
                 aria-label={locked ? `${stop.city} terkunci` : `Mainkan pos ${stop.city}`}
               >
-                <img className="city-photo" src={stop.photo} alt="" draggable={false} />
+                <span className="city-art" aria-hidden="true">{stop.icon}</span>
                 <span className="city-status">{done ? <Check /> : locked ? <LockKeyhole /> : <MapPin />}</span>
               </button>
               <div className="stop-label">
@@ -351,9 +215,9 @@ function QuestMap({ completed, enter, hud }: { completed: number; enter: (place:
             </article>
           );
         })}
-        <div className="map-decoration deco-cloud"><Art name="awan" fallback="☁️" className="h-14 w-14 object-contain" /></div>
-        <div className="map-decoration deco-flower"><img src={daisyFlower} alt="" draggable={false} className="h-16 w-16 object-contain drop-shadow-md" /></div>
-        <div className="map-decoration deco-plane"><Art name="pesawat" fallback="✈" className="h-14 w-14 object-contain" /></div>
+        <div className="map-decoration deco-cloud">☁️</div>
+        <div className="map-decoration deco-flower">🌼</div>
+        <div className="map-decoration deco-plane">✈</div>
       </div>
 
       <div className="mt-8 flex items-center justify-between border-t border-border/60 pt-5 text-xs font-bold text-muted-foreground">
@@ -367,31 +231,7 @@ function QuestMap({ completed, enter, hud }: { completed: number; enter: (place:
   );
 }
 
-function TimerChip({ getMs }: { getMs: () => number }) {
-  const [ms, setMs] = useState(getMs());
-  useEffect(() => {
-    const id = setInterval(() => setMs(getMs()), 500);
-    return () => clearInterval(id);
-  }, [getMs]);
-  return <span className="timer-chip" aria-label="Waktu bermain"><Timer />{formatTime(ms)}</span>;
-}
-
-function Dashboard({ usn, completed, ms, finished, onBoard, onSwitch }: { usn: string; completed: number; ms: number; finished: boolean; onBoard: () => void; onSwitch: () => void }) {
-  return (
-    <div className="hud">
-      <span className="hud-avatar" aria-hidden="true">{usn.charAt(0).toUpperCase()}</span>
-      <div className="hud-name"><small>PEMAIN</small><strong>@{usn}</strong></div>
-      <div className="hud-stat"><small>WAKTU</small><strong>{formatTime(ms)}</strong></div>
-      <div className="hud-stat"><small>POS</small><strong>{completed}/3</strong></div>
-      <div className="hud-actions">
-        {finished && <button className="hud-btn" onClick={onBoard} aria-label="Lihat leaderboard" title="Leaderboard"><Trophy /></button>}
-        <button className="hud-btn hud-switch" onClick={onSwitch}>GANTI</button>
-      </div>
-    </div>
-  );
-}
-
-function GameShell({ title, location, icon, onBack, children }: { title: string; location: string; icon: React.ReactNode; onBack: () => void; children: React.ReactNode }) {
+function GameShell({ title, location, icon, onBack, children }: { title: string; location: string; icon: string; onBack: () => void; children: React.ReactNode }) {
   return (
     <section className="relative z-10 mx-auto w-full max-w-4xl px-4 pb-12 pt-3 sm:px-8 sm:pt-8">
       <Button variant="ghost" className="mb-5 font-bold" onClick={onBack}><ChevronLeft /> Peta Quest</Button>
@@ -406,116 +246,135 @@ function GameShell({ title, location, icon, onBack, children }: { title: string;
   );
 }
 
-function JakartaQuest({ onBack, onWin, usn, onPenalty }: { onBack: () => void; onWin: () => void; usn: string; onPenalty: (ms: number) => void }) {
+function JakartaQuest({ onBack, onWin }: { onBack: () => void; onWin: () => void }) {
   return (
-    <GameShell title="Packing Koper Ajaib" location="POS 01 • JAKARTA" icon={<img src={jakartaPlace} alt="" draggable={false} className="h-12 w-12 rounded-full border-2 border-foreground object-cover" />} onBack={onBack}>
-      <div className="game-copy"><span className="round-pill">SIAP BERANGKAT</span><p>Masukkan barang kecil ke pouch, lalu susun semuanya ke koper. Baca Catatan Mia baik-baik: kalau resleting macet, waktumu bertambah.</p></div>
-      <PackingQuest onWin={onWin} usn={usn} onPenalty={onPenalty} />
+    <GameShell title="Packing Koper Ajaib" location="POS 01 • JAKARTA" icon="🧳" onBack={onBack}>
+      <div className="game-copy"><span className="round-pill">SIAP BERANGKAT</span><p>Koper 3D! Semua barang sudah dikemas, tinggal disusun. Barang boleh ditumpuk asal tingginya muat — kalau dipaksa diresleting, barang yang salah bakal mental keluar!</p></div>
+      <PackingQuest onWin={onWin} />
     </GameShell>
   );
 }
 
 function JogjaQuest({ onBack, onWin, onFound }: { onBack: () => void; onWin: () => void; onFound: () => void }) {
   return (
-    <GameShell title="Taman Kata Bunga" location="POS 02 • JOGJA / UGM" icon={<img src={jogjaPlace} alt="" draggable={false} className="h-12 w-12 rounded-full border-2 border-foreground object-cover" />} onBack={onBack}>
+    <GameShell title="Taman Kata Bunga" location="POS 02 • JOGJA / UGM" icon="🌻" onBack={onBack}>
       <div className="game-copy"><span className="round-pill">WORD SEARCH</span><p>Temukan 15 nama bunga yang tersembunyi. Setiap bunga yang mekar membawa bahasa bunga dan pesan penyemangat untuk Mia.</p></div>
       <FlowerWordSearch onWin={onWin} onFound={onFound} />
     </GameShell>
   );
 }
 
-const MAZE_MAP = [
-  "S..#.......",
-  ".#.#.###.#.",
-  ".#...#R#...",
-  ".###.#.#.#.",
-  "...#...#..C",
-  "~~=~~~~~=~~",
-  ".#...#.....",
-  ".#.#.###.#.",
-  ".#.#...#...",
-  "V..###.#..#",
-  ".#........F",
-];
-const MAZE_SIZE = MAZE_MAP.length;
-const FOOD_TYPES: Record<string, { art: string; emoji: string }> = {
-  R: { art: "nasi", emoji: "🍚" },
-  C: { art: "ayam", emoji: "🍗" },
-  V: { art: "sayur", emoji: "🥬" },
-};
-const FOODS: Record<string, { art: string; emoji: string }> = {};
-MAZE_MAP.forEach((row, y) => [...row].forEach((ch, x) => { const f = FOOD_TYPES[ch]; if (f) FOODS[`${x},${y}`] = f; }));
-const PIGEONS: [number, number][][] = [
-  [[6, 0], [7, 0], [8, 0], [9, 0], [10, 0]],
-  [[6, 6], [7, 6], [8, 6], [9, 6], [10, 6]],
-  [[4, 6], [4, 7], [4, 8]],
-  [[6, 10], [7, 10], [8, 10], [9, 10], [10, 10]],
-];
-const tile = (x: number, y: number) => MAZE_MAP[y]?.[x] ?? "#";
+const N = 13;
+const FINISH: [number, number] = [N - 1, N - 1];
+const edgeKey = (ax: number, ay: number, bx: number, by: number) => (ax * N + ay < bx * N + by ? `${ax},${ay}|${bx},${by}` : `${bx},${by}|${ax},${ay}`);
+const OPEN = new Set<string>();
+{
+  let seed = 2010;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+  const seen = new Set<string>(["0,0"]);
+  const stack: [number, number][] = [[0, 0]];
+  while (stack.length) {
+    const [x, y] = stack[stack.length - 1]!;
+    const opts = ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const).map(([dx, dy]) => [x + dx, y + dy] as [number, number]).filter(([a, b]) => a >= 0 && b >= 0 && a < N && b < N && !seen.has(`${a},${b}`));
+    if (!opts.length) { stack.pop(); continue; }
+    const [nx, ny] = opts[Math.floor(rnd() * opts.length)]!;
+    OPEN.add(edgeKey(x, y, nx, ny)); seen.add(`${nx},${ny}`); stack.push([nx, ny]);
+  }
+  for (let i = 0; i < 7; i++) { const x = 1 + Math.floor(rnd() * (N - 2)), y = 1 + Math.floor(rnd() * (N - 2)); if (rnd() < 0.5) OPEN.add(edgeKey(x, y, x + 1, y)); else OPEN.add(edgeKey(x, y, x, y + 1)); }
+}
+const canGo = (x: number, y: number, dx: number, dy: number) => OPEN.has(edgeKey(x, y, x + dx, y + dy));
+const DIRS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+function bfs(from: [number, number]) {
+  const dist = new Map<string, number>([[`${from[0]},${from[1]}`, 0]]); const par = new Map<string, string>(); const q = [from];
+  while (q.length) { const [x, y] = q.shift()!; for (const [dx, dy] of DIRS) { const k = `${x + dx},${y + dy}`; if (canGo(x, y, dx, dy) && !dist.has(k)) { dist.set(k, dist.get(`${x},${y}`)! + 1); par.set(k, `${x},${y}`); q.push([x + dx, y + dy]); } } }
+  const pathTo = (t: [number, number]) => { const out: [number, number][] = []; let k: string | undefined = `${t[0]},${t[1]}`; while (k) { out.unshift(k.split(",").map(Number) as [number, number]); k = par.get(k); } return out; };
+  return { dist, pathTo };
+}
+const START_BFS = bfs([0, 0]);
+const FOOD_LIST = ["🍚", "🍗", "🥬"];
+const FOODS: Record<string, string> = {};
+{
+  const ends = [...START_BFS.dist.entries()].filter(([k]) => { const [x, y] = k.split(",").map(Number) as [number, number]; return k !== "0,0" && k !== `${N - 1},${N - 1}` && DIRS.filter(([dx, dy]) => canGo(x, y, dx, dy)).length === 1; }).sort((a, b) => b[1] - a[1]);
+  const picked: [number, number][] = [];
+  for (const [k] of ends) { const c = k.split(",").map(Number) as [number, number]; if (picked.every((p) => Math.abs(p[0] - c[0]) + Math.abs(p[1] - c[1]) >= 6)) picked.push(c); if (picked.length === 3) break; }
+  picked.forEach((c, i) => { FOODS[`${c[0]},${c[1]}`] = FOOD_LIST[i]!; });
+}
+const PIGEONS: { at: [number, number]; offset: number }[] = (() => {
+  const main = START_BFS.pathTo(FINISH);
+  const cells = [0.3, 0.55, 0.8].map((f) => main[Math.floor(main.length * f)]!);
+  Object.keys(FOODS).forEach((k) => { const p = START_BFS.pathTo(k.split(",").map(Number) as [number, number]); cells.push(p[Math.floor(p.length * 0.7)]!); });
+  return cells.filter((c, i) => cells.findIndex((d) => d[0] === c[0] && d[1] === c[1]) === i).map((at, i) => ({ at, offset: i * 2 }));
+})();
+const PIGEON_CYCLE = 6;
 
 function MazeQuest({ onBack, onWin }: { onBack: () => void; onWin: () => void }) {
   const [position, setPosition] = useState<[number, number]>([0, 0]);
-  const [crash, setCrash] = useState<[number, number] | null>(null);
-  const crashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [foods, setFoods] = useState<string[]>([]);
+  const [trail, setTrail] = useState<string[]>(["0,0"]);
   const [tick, setTick] = useState(0);
-  const [note, setNote] = useState("Hati-hati sama merpati 🐦, sekali tertabrak langsung ulang dari awal! Seberangi kanal 🌊 lewat jembatan.");
+  const [note, setNote] = useState("Cari jalan di labirin Maastricht! Awas merpati 🐦 — kalau menabrak, mulai lagi dari awal!");
+  const swipe = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 650); return () => clearInterval(id); }, []);
-  const pigeonAt = (t: number) => PIGEONS.map((path) => { const n = path.length * 2 - 2; const i = t % n; return path[i < path.length ? i : n - i]; });
-  const pigeons = pigeonAt(tick);
-  const hit = (p: [number, number], list = pigeons) => list.some((q) => q?.[0] === p[0] && q?.[1] === p[1]);
-  useEffect(() => () => { if (crashTimer.current) clearTimeout(crashTimer.current); }, []);
-  const die = (at: [number, number]) => {
-    if (crash) return;
-    setCrash(at);
-    setNote("Mia tertabrak merpati! Mulai lagi dari awal 🐦💥");
-    crashTimer.current = setTimeout(() => { setPosition([0, 0]); setFoods([]); setCrash(null); }, 900);
-  };
+  const pigeonOn = (x: number, y: number, t = tick) => PIGEONS.some((p) => p.at[0] === x && p.at[1] === y && (t + p.offset) % PIGEON_CYCLE < 3);
   useEffect(() => {
-    if (!crash && hit(position)) die(position);
+    if (pigeonOn(position[0], position[1])) restart("Merpati mendarat tepat di depan Mia! Mulai lagi dari awal 🐦");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
+  const restart = (msg: string) => {
+    setPosition([0, 0]); setFoods([]); setTrail(["0,0"]); setNote(msg);
+  };
   const move = (dx: number, dy: number) => {
-    if (crash) return;
-    const next: [number, number] = [position[0] + dx, position[1] + dy];
-    const t = tile(next[0], next[1]);
-    if (next.some((v) => v < 0 || v >= MAZE_SIZE) || t === "#") return;
-    if (t === "~") return setNote("Itu kanal! Cari jembatan 🌉");
-    if (hit(next)) { setPosition(next); die(next); return; }
-    setPosition(next);
-    const key = `${next[0]},${next[1]}`;
-    const food = FOODS[key];
-    if (food && !foods.includes(key)) { setFoods([...foods, key]); setNote(`Dapat ${food.emoji}!`); }
-    if (t === "F") { if (foods.length === 3) onWin(); else setNote("Bahannya belum lengkap, cari lagi ya!"); }
+    const [x, y] = position;
+    if (!canGo(x, y, dx, dy)) return;
+    const nx = x + dx, ny = y + dy;
+    if (pigeonOn(nx, ny)) return restart("Mia menabrak merpati! Mulai lagi dari awal 🐦");
+    setPosition([nx, ny]);
+    const key = `${nx},${ny}`;
+    setTrail((t) => (t.includes(key) ? t : [...t, key]));
+    if (FOODS[key] && !foods.includes(key)) { setFoods([...foods, key]); setNote(`Dapat ${FOODS[key]}! ${foods.length + 1}/3`); }
+    if (nx === FINISH[0] && ny === FINISH[1]) { if (foods.length === 3) onWin(); else setNote("Bahannya belum lengkap, cari lagi ya!"); }
   };
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      const d: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+      const d: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0] };
       const v = d[e.key]; if (v) { e.preventDefault(); move(v[0], v[1]); }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   });
+  const wall = "2.5px solid var(--ink)";
   return (
-    <GameShell title="Gowes Mencari Rasa" location="POS 03 • BELANDA" icon={<img src={belandaPlace} alt="" draggable={false} className="h-12 w-12 rounded-full border-2 border-foreground object-cover" />} onBack={onBack}>
-      <div className="game-copy"><span className="round-pill">MAASTRICHT MAZE</span><p>Kumpulkan nasi, ayam bakar, dan sayur, lalu antar Mia ke dapur Asia. Hindari merpati, sekali tertabrak Mia mulai lagi dari awal. Seberangi kanal lewat jembatan.</p></div>
+    <GameShell title="Gowes Mencari Rasa" location="POS 03 • BELANDA" icon="🚲" onBack={onBack}>
+      <div className="game-copy"><span className="round-pill">MAASTRICHT MAZE</span><p>Labirin jalanan Maastricht! Kumpulkan nasi, ayam bakar, dan sayur di ujung-ujung gang, lalu gowes ke rumah 🏠. Awas merpati yang hinggap di jalan — kalau Mia menabraknya, harus mulai lagi dari awal!</p></div>
       <div className="maze-wrap">
-        <div className="maze-grid" style={{ gridTemplateColumns: `repeat(${MAZE_SIZE},1fr)` }}>
-          {Array.from({ length: MAZE_SIZE * MAZE_SIZE }, (_, index) => {
-            const x = index % MAZE_SIZE;
-            const y = Math.floor(index / MAZE_SIZE);
-            const key = `${x},${y}`;
-            const t = tile(x, y);
+        <div
+          className="maze-board"
+          onPointerDown={(e) => { swipe.current = { x: e.clientX, y: e.clientY }; }}
+          onPointerUp={(e) => {
+            const s = swipe.current; swipe.current = null; if (!s) return;
+            const dx = e.clientX - s.x, dy = e.clientY - s.y;
+            if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
+            if (Math.abs(dx) > Math.abs(dy)) move(Math.sign(dx), 0); else move(0, Math.sign(dy));
+          }}
+        >
+          {Array.from({ length: N * N }, (_, i) => {
+            const x = i % N, y = Math.floor(i / N), key = `${x},${y}`;
             const isMia = position[0] === x && position[1] === y;
-            const cls = t === "#" ? "wall" : t === "~" ? "water" : t === "=" ? "bridge" : t === "F" ? "finish" : "";
-            const food = FOODS[key];
-            return <div key={key} className={`maze-cell ${cls}`}>
-              {crash && crash[0] === x && crash[1] === y ? <span className="mia-crash"><Art name="tabrak" fallback="💥" /></span> : isMia ? <span className="mia-bike"><Art name="sepeda" fallback="🚲" /></span> : hit([x, y]) ? <Art name="merpati" fallback="🐦" /> : food && !foods.includes(key) ? <Art name={food.art} fallback={food.emoji} /> : t === "F" ? <Art name="dapur" fallback="🏠" /> : ""}
-            </div>;
+            const bird = PIGEONS.find((p) => p.at[0] === x && p.at[1] === y);
+            return (
+              <div key={key} className={`maze-cell2 ${trail.includes(key) ? "trail" : ""} ${x === FINISH[0] && y === FINISH[1] ? "finish" : ""}`} style={{
+                borderTop: y === 0 || !canGo(x, y, 0, -1) ? wall : undefined,
+                borderLeft: x === 0 || !canGo(x, y, -1, 0) ? wall : undefined,
+                borderRight: x === N - 1 ? wall : undefined,
+                borderBottom: y === N - 1 ? wall : undefined,
+              }}>
+                {isMia ? <span className="mia-bike">🚲</span> : bird && pigeonOn(x, y) ? "🐦" : FOODS[key] && !foods.includes(key) ? FOODS[key] : x === FINISH[0] && y === FINISH[1] ? "🏠" : bird ? <span className="opacity-30">·</span> : ""}
+              </div>
+            );
           })}
         </div>
         <div className="maze-side">
-          <div className="ingredient-list"><strong>KERANJANG</strong>{Object.entries(FOODS).map(([key, food]) => <span key={key} className={foods.includes(key) ? "found" : ""}><Art name={food.art} fallback={food.emoji} className="h-7 w-7 object-contain" /></span>)}</div>
+          <div className="ingredient-list"><strong>KERANJANG</strong>{Object.entries(FOODS).map(([key, emoji]) => <span key={key} className={foods.includes(key) ? "found" : ""}>{emoji}</span>)}</div>
           <div className="dpad">
             <Button size="icon" variant="outline" className="up" onClick={() => move(0, -1)} aria-label="Atas"><ArrowUp /></Button>
             <Button size="icon" variant="outline" className="left" onClick={() => move(-1, 0)} aria-label="Kiri"><ArrowLeft /></Button>
@@ -537,7 +396,7 @@ function PostcardCollection({ completed, onBack, onOpen }: { completed: number; 
       <div className="postcard-grid">
         {POSTCARDS.map((card, index) => (
           <button key={card.city} disabled={index >= completed} className={`postcard-preview postcard-${index + 1}`} onClick={() => onOpen(index)}>
-            {index >= completed ? <><LockKeyhole /><strong>Masih terkunci</strong><small>Selesaikan Pos {index + 1}</small></> : <><span className="postcard-stamp">{card.stamp}</span><img className="postcard-thumb" src={STOPS[index]?.photo} alt="" draggable={false} /><small>SALAM DARI</small><strong>{card.city}</strong><p>{card.front}</p><span className="read-card">Buka surat <ArrowRight /></span></>}
+            {index >= completed ? <><LockKeyhole /><strong>Masih terkunci</strong><small>Selesaikan Pos {index + 1}</small></> : <><span className="postcard-stamp">{card.stamp}</span><span className="postcard-icon">{card.icon}</span><small>SALAM DARI</small><strong>{card.city}</strong><p>{card.front}</p><span className="read-card">Buka surat <ArrowRight /></span></>}
           </button>
         ))}
       </div>
@@ -545,24 +404,14 @@ function PostcardCollection({ completed, onBack, onOpen }: { completed: number; 
   );
 }
 
-const lastPhoto: Record<string, string> = {};
-// Tiap kali kartu dibuka, ambil satu foto acak dari kota itu (tidak sama dengan foto terakhir yang keluar).
-function pickPhoto(city: string, photos: string[]) {
-  const pool = photos.length > 1 ? photos.filter((photo) => photo !== lastPhoto[city]) : photos;
-  const pick = pool[Math.floor(Math.random() * pool.length)] ?? photos[0];
-  if (pick) lastPhoto[city] = pick;
-  return pick;
-}
-
 function PostcardModal({ index, onClose, onContinue }: { index: number; onClose: () => void; onContinue: () => void }) {
   const card = POSTCARDS[index] ?? POSTCARDS[0];
-  const [photo] = useState(() => (card ? pickPhoto(card.city, card.photos) : undefined));
   if (!card) return null;
   return (
     <div className="postcard-modal" role="dialog" aria-modal="true" aria-label={`Postcard dari ${card.city}`}>
       <button className="modal-close" onClick={onClose} aria-label="Tutup"><X /></button>
       <div className={`postcard-letter postcard-${index + 1}`}>
-        <div className="letter-visual">{photo && <img className="letter-photo" src={photo} alt={`Foto ${card.city}`} draggable={false} />}<span className="postcard-stamp">{card.stamp}</span><small>POSTCARD FROM</small><h2>{card.city}</h2></div>
+        <div className="letter-visual"><span className="postcard-stamp">{card.stamp}</span><span>{card.icon}</span><small>POSTCARD FROM</small><h2>{card.city}</h2></div>
         <div className="letter-copy"><Heart fill="currentColor" /><h3>Untuk Mia,</h3><p>{card.letter}</p><strong>Happy Birthday, Mia!</strong><small>— dengan hangat, dari semua yang sayang Mia</small></div>
       </div>
       <Button className="mt-5" onClick={onContinue}>{index === 2 ? "Kembali ke Peta" : "Lanjutkan Petualangan"} <ArrowRight /></Button>
