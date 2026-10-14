@@ -1,349 +1,535 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
-import aksesorisImg from "@/assets/pack/aksesoris.png";
-import alaskakiImg from "@/assets/pack/alaskaki.png";
-import bajuImg from "@/assets/pack/baju.png";
-import bawahanImg from "@/assets/pack/bawahan.png";
-import cemilanImg from "@/assets/pack/cemilan.png";
-import dalemanImg from "@/assets/pack/daleman.png";
-import jaketImg from "@/assets/pack/jaket.png";
-import makeupImg from "@/assets/pack/makeup.png";
-import mandiImg from "@/assets/pack/mandi.png";
-import olehImg from "@/assets/pack/oleh.png";
-import payungImg from "@/assets/pack/payung.png";
-import pouchImg from "@/assets/pack/pouch.png";
-import pouchWideImg from "@/assets/pack/pouch-wide.png";
+import aksesoris from "@/assets/pack3d/aksesoris.webp";
+import baju from "@/assets/pack3d/baju.webp";
+import bawahan from "@/assets/pack3d/bawahan.webp";
+import cemilan from "@/assets/pack3d/cemilan.webp";
+import daleman from "@/assets/pack3d/daleman.webp";
+import jaket from "@/assets/pack3d/jaket.webp";
+import makeup from "@/assets/pack3d/makeup.webp";
+import mandi from "@/assets/pack3d/mandi.webp";
+import oleh from "@/assets/pack3d/oleh.webp";
+import payung from "@/assets/pack3d/payung.webp";
+import pouchSqBase from "@/assets/pack3d/pouch-sq-base.webp";
+import pouchSqRim from "@/assets/pack3d/pouch-sq-rim.webp";
+import pouchSq from "@/assets/pack3d/pouch-sq.webp";
+import pouchWideBase from "@/assets/pack3d/pouch-wide-base.webp";
+import pouchWideRim from "@/assets/pack3d/pouch-wide-rim.webp";
+import pouchWide from "@/assets/pack3d/pouch-wide.webp";
+import sepatu from "@/assets/pack3d/sepatu.webp";
 import { Button } from "@/components/ui/button";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import {
+  type Assignment, BLOCKS, BLOCK_IDS, type BlockId, COLS, DEPTH, HALF, POUCHES, POUCH_IDS, type Placed, type PouchId,
+  ROWS, SMALLS, SMALL_IDS, type Small, brokenRules, contentsOf, dimsOf, hasAbove, isPouch, nearestDrop, settle, sortProblems,
+  usedCap, variantFor, hashString,
+} from "./packing/puzzle";
 
-const COLS = 6;
-const ROWS = 6;
-const HALF = 3;
+const ART: Record<string, string> = { sepatu, jaket, baju, bawahan, payung, oleh, makeup, mandi, cemilan, aksesoris, daleman };
+const POUCH_ART = {
+  wide: { top: pouchWide, base: pouchWideBase, rim: pouchWideRim },
+  sq: { top: pouchSq, base: pouchSqBase, rim: pouchSqRim },
+};
+const TILT = 46;
+const SORT_PENALTY_MS = 10_000;
+const ZIP_PENALTY_MS = 15_000;
 
-type Block = { id: string; name: string; img: string; w: number; h: number; cap?: number };
-type Small = { id: string; name: string; img: string; units: number };
+type Orient = 0 | 1;
+type Phase = "sort" | "pack" | "zipped";
+type Drag = {
+  kind: "small" | "block";
+  id: string;
+  px: number;
+  py: number;
+  sx: number;
+  sy: number;
+  touch: boolean;
+  moved: boolean;
+  from: string | null; // small: id pouch asal; block: "table" | "board"
+  rot: Orient;
+  hover: string | null; // small: pouch di bawah jari
+  target: Placed | null; // block: tempat mendarat
+  overBoard: boolean;
+};
 
-const BIG: Block[] = [
-  { id: "baju", name: "Baju", img: bajuImg, w: 2, h: 3 },
-  { id: "bawahan", name: "Bawahan", img: bawahanImg, w: 2, h: 3 },
-  { id: "jaket", name: "Jaket", img: jaketImg, w: 3, h: 2 },
-  { id: "alaskaki", name: "Sepatu", img: alaskakiImg, w: 2, h: 2 },
-  { id: "payung", name: "Payung", img: payungImg, w: 1, h: 3 },
-  { id: "daleman", name: "Daleman", img: dalemanImg, w: 1, h: 2 },
-  { id: "oleh", name: "Oleh-oleh", img: olehImg, w: 2, h: 1 },
-];
-const POUCHES: Block[] = [
-  { id: "pouchL", name: "Pouch besar", img: pouchImg, w: 2, h: 2, cap: 4 },
-  { id: "pouchM", name: "Pouch sedang", img: pouchWideImg, w: 2, h: 1, cap: 2 },
-  { id: "pouchS", name: "Pouch kecil", img: pouchImg, w: 1, h: 1, cap: 1 },
-];
-const SMALLS: Small[] = [
-  { id: "makeup", name: "Make up", img: makeupImg, units: 2 },
-  { id: "mandi", name: "Alat mandi", img: mandiImg, units: 2 },
-  { id: "cemilan", name: "Cemilan", img: cemilanImg, units: 2 },
-  { id: "aksesoris", name: "Aksesoris", img: aksesorisImg, units: 1 },
-];
-const BLOCKS = [...BIG, ...POUCHES];
-const blockById = (id: string) => BLOCKS.find((b) => b.id === id);
-const smallById = (id: string) => SMALLS.find((s) => s.id === id);
-
-type Pos = { x: number; y: number };
-type Drag = { id: string; offX: number; offY: number; cw: number; ch: number; lift: number; px: number; py: number; startX: number; startY: number; moved: boolean; from?: Pos | undefined };
-
-// PNG pouch sudah diberi margin transparan ~5.9% di tiap sisi supaya ritsleting tidak terpotong.
-// Gambar digambar sedikit lebih besar dari kotaknya supaya bagian pouch tetap pas di grid.
-const POUCH_PAD = { left: "-5.9%", top: "-5.9%", width: "111.8%", height: "111.8%" } as const;
-
-export function PackingQuest({ onWin }: { onWin: () => void }) {
-  const isMobile = useIsMobile();
-  const cell = isMobile ? 44 : 58;
-  const gap = Math.round(cell * 0.35);
-  const colLeft = (x: number) => x * cell + (x >= HALF ? gap : 0);
-  const [placed, setPlaced] = useState<Record<string, Pos>>({});
-  const [rotated, setRotated] = useState<Record<string, boolean>>({});
-  const [inPouch, setInPouch] = useState<Record<string, string>>({});
-  const [drag, setDrag] = useState<Drag | null>(null);
-  const [message, setMessage] = useState("Seret barang ke dalam koper. Ketuk barang untuk memutarnya.");
-  const [zipped, setZipped] = useState(false);
-  const boardRef = useRef<HTMLDivElement>(null);
-
-  const dims = (id: string, rot = rotated[id]) => {
-    const b = blockById(id);
-    if (!b) return { w: 1, h: 1 };
-    return rot ? { w: b.h, h: b.w } : { w: b.w, h: b.h };
-  };
-
-  const occupancy = useMemo(() => {
-    const map = new Map<string, string>();
-    Object.entries(placed).forEach(([id, p]) => {
-      const { w, h } = dims(id);
-      for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) map.set(`${p.x + dx},${p.y + dy}`, id);
-    });
-    return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placed, rotated]);
-
-  const fits = (id: string, x: number, y: number, rot = rotated[id]) => {
-    const { w, h } = dims(id, rot);
-    if (x < 0 || y < 0 || x + w > COLS || y + h > ROWS) return false;
-    if (x < HALF && x + w > HALF) return false;
-    for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) {
-      const o = occupancy.get(`${x + dx},${y + dy}`);
-      if (o && o !== id) return false;
-    }
-    return true;
-  };
-
-  const pouchUsed = (pid: string) =>
-    Object.entries(inPouch).filter(([, p]) => p === pid).reduce((s, [sid]) => s + (smallById(sid)?.units ?? 0), 0);
-
-  // Cari kotak valid TERDEKAT dari posisi lepas (bukan harus pas banget), jadi melepas di
-  // tengah / dekat engsel tetap "nempel" ke sisi yang muat.
-  const dropTarget = (d: Drag) => {
-    const rect = boardRef.current?.getBoundingClientRect();
-    if (!rect || !blockById(d.id)) return null;
-    // Posisi barang (bukan jari): di HP barang diangkat sedikit di atas jari supaya tidak tertutup.
-    const tlX = d.px - d.offX - rect.left;
-    const tlY = d.py - d.offY - d.lift - rect.top;
-    const cx = tlX + d.cw / 2;
-    const cy = tlY + d.ch / 2;
-    const m = cell * 0.5;
-    const inside = cx >= -m && cx <= rect.width + m && cy >= -m && cy <= rect.height + m;
-    let relX = tlX;
-    if (relX > HALF * cell + gap / 2) relX -= gap;
-    const raw = { x: Math.round(relX / cell), y: Math.round(tlY / cell) };
-    if (!inside) return { ...raw, ok: false, inside: false };
-    let best: { x: number; y: number; dist: number } | null = null;
-    for (let x = 0; x < COLS; x++) {
-      for (let y = 0; y < ROWS; y++) {
-        if (!fits(d.id, x, y)) continue;
-        const dist = Math.hypot(colLeft(x) - tlX, y * cell - tlY);
-        if (!best || dist < best.dist) best = { x, y, dist };
-      }
-    }
-    // toleransi besar: lepas di dekat engsel / di antara dua sisi tetap nempel ke tempat yang muat
-    if (best && best.dist <= cell * 2.5) return { x: best.x, y: best.y, ok: true, inside: true };
-    return { ...raw, ok: false, inside: true };
-  };
-
-  const startDrag = (id: string, e: React.PointerEvent) => {
-    if (zipped) return;
-    e.preventDefault();
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDrag({ id, offX: e.clientX - r.left, offY: e.clientY - r.top, cw: r.width, ch: r.height, lift: e.pointerType === "touch" ? 44 : 0, px: e.clientX, py: e.clientY, startX: e.clientX, startY: e.clientY, moved: false, from: placed[id] });
-  };
-
+function useNarrow() {
+  const [narrow, setNarrow] = useState(false);
   useEffect(() => {
-    if (!drag) return;
-    const move = (e: PointerEvent) =>
-      setDrag((d) => d && { ...d, px: e.clientX, py: e.clientY, moved: d.moved || Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 6 });
-    const up = (e: PointerEvent) => {
-      const d = drag;
-      setDrag(null);
-      const final = { ...d, px: e.clientX, py: e.clientY };
-      const small = smallById(d.id);
-      if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) <= 6) {
-        if (small) { if (inPouch[small.id]) { const n = { ...inPouch }; delete n[small.id]; setInPouch(n); setMessage(`${small.name} dikeluarkan dari pouch.`); } return; }
-        // tap = rotate
-        const rot = !rotated[d.id];
-        if (d.from && !fits(d.id, d.from.x, d.from.y, rot)) return setMessage("Nggak bisa diputar di situ, sempit!");
-        setRotated({ ...rotated, [d.id]: rot });
-        return;
-      }
-      const gx = e.clientX - d.offX + d.cw / 2;
-      const gy = e.clientY - d.offY - d.lift + d.ch / 2;
-      const under = (document.elementFromPoint(gx, gy) ?? document.elementFromPoint(e.clientX, e.clientY))?.closest<HTMLElement>("[data-pouch]");
-      const pouchId = under?.dataset["pouch"];
-      if (small) {
-        if (!pouchId) return setMessage("Barang kecil harus masuk pouch transparan dulu ya.");
-        const pouch = blockById(pouchId);
-        if (!pouch?.cap) return;
-        const used = pouchUsed(pouchId) - (inPouch[small.id] === pouchId ? small.units : 0);
-        if (used + small.units > pouch.cap) return setMessage(`${pouch.name} sudah penuh untuk ${small.name}.`);
-        setInPouch({ ...inPouch, [small.id]: pouchId });
-        return setMessage(`${small.name} masuk ${pouch.name} 👝`);
-      }
-      if (d.id === "daleman" && pouchId) return setMessage("Daleman nggak boleh masuk pouch ya 🙈");
-      const t = dropTarget(final);
-      if (t?.ok) {
-        setPlaced({ ...placed, [d.id]: { x: t.x, y: t.y } });
-        setMessage(`${blockById(d.id)?.name} masuk koper ✨`);
-      } else if (t?.inside) {
-        // dilepas di dalam koper tapi nggak ada tempat yang muat: barang tetap di posisi semula
-        setMessage("Belum muat di situ. Coba putar (ketuk barang) atau geser ke tempat lain ya!");
-      } else if (d.from) {
-        const n = { ...placed }; delete n[d.id]; setPlaced(n);
-        setMessage(`${blockById(d.id)?.name} dikeluarkan dari koper.`);
-      }
-    };
-    const cancel = () => setDrag(null);
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up, { once: true });
-    window.addEventListener("pointercancel", cancel, { once: true });
-    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", cancel); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drag?.id, drag?.startX, drag?.startY]);
+    const mq = window.matchMedia("(max-width: 720px)");
+    const update = () => setNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
 
-  const allDone = BLOCKS.every((b) => placed[b.id]) && SMALLS.every((s) => inPouch[s.id]);
-  const target = drag && drag.moved ? dropTarget(drag) : null;
-  const reset = () => { setPlaced({}); setRotated({}); setInPouch({}); setMessage("Koper dikosongkan. Yuk susun ulang!"); };
-
-  const art = (id: string, ghost = false) => {
-    const b = blockById(id);
-    if (b) {
-      const { w, h } = dims(id);
-      const contents = SMALLS.filter((s) => inPouch[s.id] === id);
-      return (
-        <div
-          data-pouch={b.cap && !ghost ? b.id : undefined}
-          className="relative"
-          style={{ width: w * cell, height: h * cell }}
-          title={b.name}
-        >
-          {b.cap ? (
-            <>
-              {rotated[id] && b.w !== b.h ? (
-                <img src={b.img} alt={b.name} draggable={false} className="absolute left-1/2 top-1/2 max-w-none object-fill" style={{ width: b.w * cell * 1.118, height: b.h * cell * 1.118, transform: "translate(-50%,-50%) rotate(90deg)" }} />
-              ) : (
-                <img src={b.img} alt={b.name} draggable={false} className="absolute max-w-none object-fill" style={POUCH_PAD} />
-              )}
-              <div className={cn("absolute flex flex-wrap content-center items-center justify-center gap-0.5", rotated[id] && b.w !== b.h ? "inset-y-[10%] left-[8%] right-[24%]" : "inset-x-[9%] bottom-[8%] top-[24%]")}>
-                {contents.map((s) => (
-                  <img key={s.id} src={s.img} alt={s.name} draggable={false} onPointerDown={(e) => { e.stopPropagation(); startDrag(s.id, e); }} className="cursor-grab touch-none object-contain" style={{ width: cell * 0.48, height: cell * 0.48 }} />
-                ))}
-              </div>
-            </>
-          ) : (
-            <img
-              src={b.img}
-              alt={b.name}
-              draggable={false}
-              className="absolute left-1/2 top-1/2 max-w-none object-contain drop-shadow-md transition-transform"
-              style={{ width: b.w * cell * 0.94, height: b.h * cell * 0.94, transform: `translate(-50%,-50%) rotate(${rotated[id] ? 90 : 0}deg)` }}
-            />
-          )}
-        </div>
-      );
-    }
-    const s = smallById(id);
-    return s ? <img src={s.img} alt={s.name} title={s.name} draggable={false} className="object-contain drop-shadow-md" style={{ width: cell * 1.1, height: cell * 1.1 }} /> : null;
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
 
-  const draggingId = drag?.moved ? drag.id : null;
+/** Posisi acak tapi tetap untuk tiap pemain: barang "bercecer" di meja. */
+function scatter(ids: string[], seed: number, cols: number) {
+  const rnd = mulberry32(seed);
+  const order = [...ids].sort(() => rnd() - 0.5);
+  const rows = Math.ceil(ids.length / cols);
+  const out: Record<string, { left: number; top: number; rot: number }> = {};
+  order.forEach((id, i) => {
+    out[id] = {
+      left: ((i % cols) + 0.5) / cols * 100 + (rnd() - 0.5) * 8,
+      top: (Math.floor(i / cols) + 0.5) / rows * 100 + (rnd() - 0.5) * 10,
+      rot: (rnd() - 0.5) * 18,
+    };
+  });
+  return { pos: out, rows };
+}
 
-  // Setelah diresletingkan: daftar barang hilang, hanya koper di layar.
-  // Koper tampil membesar lalu menyusut perlahan ke ukuran semula.
-  if (zipped) {
-    return (
-      <div className="mt-6 flex min-h-[62vh] select-none flex-col items-center justify-center px-2 pb-6">
-        <div className="packed-zoom">
-          <ClosedSuitcase />
-        </div>
-        <Button className="packed-cta mt-7" size="lg" onClick={onWin}>Berangkat! ✈️</Button>
-      </div>
-    );
+function contentLayout(n: number, w: number, h: number) {
+  if (n === 0) return [];
+  const cols = n <= 2 ? n : 2;
+  const rows = Math.ceil(n / cols);
+  const s = Math.min(w / cols, h / rows) * 0.8;
+  return Array.from({ length: n }, (_, i) => ({
+    x: ((i % cols) + 0.5) * (w / cols) - s / 2,
+    y: (Math.floor(i / cols) + 0.5) * (h / rows) - s / 2 + h * 0.04,
+    s,
+  }));
+}
+
+const pouchKind = (id: PouchId) => (id === "pc" ? "sq" : "wide");
+const nameOf = (id: string, assign: Assignment) => {
+  if (id in SMALLS) return SMALLS[id as Small].name;
+  const b = BLOCKS[id as BlockId];
+  if (isPouch(id as BlockId)) {
+    const c = contentsOf(assign, id as PouchId);
+    return c.length ? `${b.name}: ${c.map((s) => SMALLS[s].name).join(" + ")}` : b.name;
   }
+  return b.name;
+};
+
+/* ---------- Gambar datar (meja, pouch fase 1, bayangan jari) ---------- */
+function FlatSmall({ id, size, className, style, onPointerDown }: { id: Small; size: number; className?: string; style?: CSSProperties; onPointerDown?: (e: ReactPointerEvent) => void }) {
+  return (
+    <div className={cn("pk-flat", className)} style={{ width: size, height: size, ...style }} onPointerDown={onPointerDown} data-small={id} title={SMALLS[id].name}>
+      <img src={ART[id]} alt={SMALLS[id].name} draggable={false} className="h-full w-full object-contain" />
+      <span className="pk-pips">{"●".repeat(SMALLS[id].size)}</span>
+    </div>
+  );
+}
+
+function FlatBlock({ id, assign, px, rot, className, style, onPointerDown, label = true }: { id: BlockId; assign: Assignment; px: number; rot: Orient; className?: string; style?: CSSProperties; onPointerDown?: (e: ReactPointerEvent) => void; label?: boolean }) {
+  const b = BLOCKS[id];
+  const d = dimsOf(id, rot);
+  const w = b.w * px, h = b.l * px;
+  return (
+    <div className={cn("pk-flat", className)} style={{ width: d.w * px, height: d.l * px, ...style }} onPointerDown={onPointerDown} data-block={id} title={nameOf(id, assign)}>
+      <div style={{ position: "absolute", left: "50%", top: "50%", width: w, height: h, transform: `translate(-50%,-50%) rotate(${rot * 90}deg)` }}>
+        {isPouch(id) ? (
+          <>
+            <img src={POUCH_ART[pouchKind(id)].top} alt="" draggable={false} className="h-full w-full object-contain" />
+            {contentLayout(contentsOf(assign, id).length, w, h).map((c, i) => {
+              const s = contentsOf(assign, id)[i];
+              return s ? <img key={s} src={ART[s]} alt="" draggable={false} className="absolute object-contain" style={{ left: c.x, top: c.y, width: c.s, height: c.s }} /> : null;
+            })}
+          </>
+        ) : (
+          <img src={ART[id]} alt="" draggable={false} className="h-full w-full object-contain" />
+        )}
+      </div>
+      {label && <span className="pk-label">{isPouch(id) ? `Pouch (${contentsOf(assign, id).length})` : b.name}</span>}
+    </div>
+  );
+}
+
+/* ---------- Balok 3D di dalam koper: lapisan gambar yang ditumpuk supaya punya tebal ---------- */
+function Block3D({ p, assign, cell, unit, gap, dim, onPointerDown }: { p: Placed; assign: Assignment; cell: number; unit: number; gap: number; dim: boolean; onPointerDown: (e: ReactPointerEvent) => void }) {
+  const b = BLOCKS[p.id];
+  const d = dimsOf(p.id, p.rot);
+  const pouch = isPouch(p.id);
+  const base = p.z * unit;
+  const height = (pouch ? 0.9 : b.t) * unit;
+  const w = b.w * cell, h = b.l * cell;
+  const n = Math.max(3, Math.round(height / 2));
+  const left = p.x * cell + (p.x >= HALF ? gap : 0);
+  const art = pouch ? POUCH_ART[pouchKind(p.id as PouchId)] : null;
+  const items = pouch ? contentsOf(assign, p.id as PouchId) : [];
+  const pad = pouch ? 0.04 : p.id === "jaket" ? 0.03 : 0.08;
 
   return (
-    <div className="mt-6 select-none px-2 pb-2 sm:px-6">
-      <div className="grid gap-8 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-start">
-        {/* Suitcase */}
-        <div className="mx-auto flex flex-col items-center">
-          {(
-          <div className="relative mt-2">
-            <div className="relative rounded-[28px] border-4 border-foreground/85 bg-primary p-3 shadow-[0_10px_0_var(--foreground)]">
-              <div className="pointer-events-none absolute inset-1.5 rounded-[22px] border-2 border-dashed border-foreground/40" />
-              <div ref={boardRef} className="relative" style={{ width: COLS * cell + gap, height: ROWS * cell }}>
-                {[0, 1].map((side) => (
-                  <div
-                    key={side}
-                    className="pointer-events-none absolute top-0 rounded-2xl border-2 border-foreground/60"
-                    style={{
-                      left: side ? HALF * cell + gap : 0,
-                      width: HALF * cell,
-                      height: ROWS * cell,
-                      backgroundColor: "var(--sun-pale)",
-                      backgroundImage: `repeating-linear-gradient(45deg, transparent 0 10px, color-mix(in oklab, var(--secondary) 45%, transparent) 10px 12px)`,
-                    }}
-                  />
-                ))}
-                {/* hinge + zipper */}
-                <div className="pointer-events-none absolute top-2 bottom-2 flex flex-col items-center justify-evenly" style={{ left: HALF * cell, width: gap }}>
-                  {Array.from({ length: 10 }).map((_, i) => (
-                    <span key={i} className="h-1.5 w-2 rounded-sm bg-foreground/70" />
-                  ))}
-                </div>
-                {target && target.inside && blockById(drag?.id ?? "") && (
-                  <div
-                    className={cn("pointer-events-none absolute rounded-lg border-2 border-dashed", target.ok ? "border-foreground bg-accent/40" : "border-destructive bg-destructive/20")}
-                    style={{ left: colLeft(target.x), top: target.y * cell, width: dims(drag!.id).w * cell, height: dims(drag!.id).h * cell }}
-                  />
-                )}
-                {Object.entries(placed).map(([id, p]) => (
-                  <div
-                    key={id}
-                    onPointerDown={(e) => startDrag(id, e)}
-                    className={cn("absolute cursor-grab touch-none animate-in zoom-in-90", draggingId === id && "opacity-30")}
-                    style={{ left: colLeft(p.x), top: p.y * cell }}
-                  >
-                    {art(id)}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="flex justify-between px-6">
-              {[0, 1].map((side) => (
-                <div key={side} className="flex gap-10" style={{ width: HALF * cell - 12, justifyContent: "space-between" }}>
-                  <span className="h-5 w-5 rounded-full border-4 border-foreground/85 bg-card" />
-                  <span className="h-5 w-5 rounded-full border-4 border-foreground/85 bg-card" />
-                </div>
-              ))}
-            </div>
-          </div>
-          )}
-          <p className="mt-2 min-h-10 max-w-sm text-center text-sm font-bold text-muted-foreground">{message}</p>
-        </div>
-
-        {/* Tray */}
-        <div className="space-y-5">
-          <Shelf title="Barang">
-            {BIG.filter((b) => !placed[b.id]).map((b) => (
-              <div key={b.id} onPointerDown={(e) => startDrag(b.id, e)} className={cn("cursor-grab touch-none rounded-xl transition hover:-translate-y-0.5", draggingId === b.id && "opacity-30")}>{art(b.id)}</div>
-            ))}
-          </Shelf>
-          <Shelf title="Pouch transparan">
-            {POUCHES.filter((b) => !placed[b.id]).map((b) => (
-              <div key={b.id} onPointerDown={(e) => startDrag(b.id, e)} className={cn("cursor-grab touch-none", draggingId === b.id && "opacity-30")}>{art(b.id)}</div>
-            ))}
-          </Shelf>
-          <Shelf title="Barang kecil → masukkan ke pouch">
-            {SMALLS.filter((s) => !inPouch[s.id]).map((s) => (
-              <div key={s.id} onPointerDown={(e) => startDrag(s.id, e)} className={cn("cursor-grab touch-none", draggingId === s.id && "opacity-30")}>{art(s.id)}</div>
-            ))}
-          </Shelf>
-          <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-            <Button variant="secondary" onClick={reset}>Bongkar semua</Button>
-            <Button disabled={!allDone} onClick={() => setZipped(true)}>Resleting koper <Sparkles /></Button>
-          </div>
-        </div>
+    <div className="pk3-item" data-block={p.id} onPointerDown={onPointerDown} title={nameOf(p.id, assign)}
+      style={{ left, top: p.y * cell, width: d.w * cell, height: d.l * cell, opacity: dim ? 0.35 : 1 }}>
+      <div className="pk3-orient" style={{ width: w, height: h, transform: `translate(-50%,-50%) rotate(${p.rot * 90}deg)` }}>
+        <img className="pk3-layer pk3-shadow" draggable={false} src={art ? art.top : ART[p.id]} alt="" style={{ transform: `translateZ(${base + 0.6}px) translate(${4 + base / 8}px,${5 + base / 7}px) scale(${1 - pad})` }} />
+        {Array.from({ length: n + 1 }, (_, i) => {
+          const f = i / n;
+          const top = i === n, bottom = i === 0;
+          const s = pouch ? 1 - 0.075 * Math.pow(Math.abs(2 * f - 1), 2.2) : 1;
+          const src = art ? (top ? art.top : bottom ? art.base : art.rim) : ART[p.id];
+          return (
+            <img key={i} className="pk3-layer" draggable={false} src={src} alt=""
+              style={{ transform: `translateZ(${base + height * f}px) scale(${s * (1 - pad)})`, filter: top ? undefined : `brightness(${0.7 + 0.2 * f}) saturate(.92)`, opacity: pouch && !top && !bottom ? 0.9 : 1 }} />
+          );
+        })}
+        {contentLayout(items.length, w, h).map((c, i) => {
+          const s = items[i];
+          return s ? (
+            <img key={s} className="pk3-layer" draggable={false} src={ART[s]} alt="" style={{ left: c.x, top: c.y, width: c.s, height: c.s, right: "auto", bottom: "auto", transform: `translateZ(${base + height * 0.42}px)`, filter: "drop-shadow(2px 3px 0 rgba(60,35,0,.28))" }} />
+          ) : null;
+        })}
       </div>
-
-      {drag?.moved && (
-        <div className="pointer-events-none fixed z-50 rotate-2 scale-105 opacity-90" style={{ left: drag.px - drag.offX, top: drag.py - drag.offY - drag.lift }}>
-          {art(drag.id, true)}
-        </div>
+      {pouch && items.length > 0 && (
+        <div className="pk3-badge" style={{ transform: `translateZ(${base + height + 6}px) rotateX(-${TILT}deg)` }}>{items.length}</div>
       )}
     </div>
   );
 }
 
-function Shelf({ title, children }: { title: string; children: React.ReactNode }) {
+export function PackingQuest({ onWin, usn, onPenalty }: { onWin: () => void; usn?: string | null; onPenalty?: (ms: number) => void }) {
+  const narrow = useNarrow();
+  const cell = narrow ? 46 : 70;
+  const unit = narrow ? 17 : 26;
+  const gap = narrow ? 14 : 24;
+  const floorW = COLS * cell + gap;
+  const floorH = ROWS * cell;
+  const stageH = Math.round((floorH + 36) * 0.72 + DEPTH * unit + 20);
+  const tableScale = narrow ? 0.56 : 0.6;
+
+  const variant = useMemo(() => variantFor(usn), [usn]);
+  const seed = useMemo(() => hashString(`${usn ?? ""}-pack`), [usn]);
+  const smallScatter = useMemo(() => scatter(SMALL_IDS, seed, narrow ? 3 : 5), [seed, narrow]);
+  const blockScatter = useMemo(() => scatter(BLOCK_IDS, seed + 7, narrow ? 3 : 5), [seed, narrow]);
+
+  const [phase, setPhase] = useState<Phase>("sort");
+  const [assign, setAssign] = useState<Assignment>({});
+  const [placed, setPlaced] = useState<Placed[]>([]);
+  const [rots, setRots] = useState<Partial<Record<BlockId, Orient>>>({});
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const [msg, setMsg] = useState("");
+  const [shaking, setShaking] = useState(false);
+
+  const S = useRef({ phase, assign, placed, rots, drag, cell });
+  S.current = { phase, assign, placed, rots, drag, cell };
+  const shakeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (shakeTimer.current) clearTimeout(shakeTimer.current); }, []);
+
+  const shake = () => {
+    setShaking(true);
+    if (shakeTimer.current) clearTimeout(shakeTimer.current);
+    shakeTimer.current = setTimeout(() => setShaking(false), 520);
+  };
+
+  /* ----- hit test ----- */
+  const computeSmallHover = (px: number, py: number) => {
+    const el = document.elementsFromPoint(px, py).find((e) => e instanceof HTMLElement && e.dataset["pouch"]);
+    return el instanceof HTMLElement ? (el.dataset["pouch"] ?? null) : null;
+  };
+  const computeTarget = (d: Drag): { target: Placed | null; overBoard: boolean } => {
+    const ay = d.py - (d.touch ? 60 : 0);
+    const el = document.elementsFromPoint(d.px, ay).find((e) => e instanceof HTMLElement && e.dataset["cell"]);
+    if (!(el instanceof HTMLElement)) return { target: null, overBoard: false };
+    const [cx, cy] = (el.dataset["cell"] ?? "0,0").split(",").map(Number) as [number, number];
+    const r = el.getBoundingClientRect();
+    const fx = cx + Math.min(1, Math.max(0, (d.px - r.left) / r.width));
+    const fy = cy + Math.min(1, Math.max(0, (ay - r.top) / r.height));
+    const others = settle(S.current.placed.filter((p) => p.id !== d.id));
+    return { target: nearestDrop(others, d.id as BlockId, d.rot, fx, fy), overBoard: true };
+  };
+
+  /* ----- mulai seret ----- */
+  const beginSmall = (e: ReactPointerEvent, id: Small, from: PouchId | null) => {
+    if (S.current.phase !== "sort") return;
+    e.preventDefault();
+    setMsg("");
+    const d: Drag = { kind: "small", id, px: e.clientX, py: e.clientY, sx: e.clientX, sy: e.clientY, touch: e.pointerType === "touch", moved: false, from, rot: 0, hover: null, target: null, overBoard: false };
+    S.current.drag = d;
+    setDrag(d);
+  };
+  const beginBlock = (e: ReactPointerEvent, id: BlockId, from: "table" | "board") => {
+    if (S.current.phase !== "pack") return;
+    e.preventDefault();
+    const cur = S.current.placed.find((p) => p.id === id);
+    if (from === "board" && cur && hasAbove(S.current.placed, cur)) {
+      setMsg("Ada barang di atasnya. Angkat yang di atas dulu.");
+      return;
+    }
+    setMsg("");
+    const rot = from === "board" && cur ? cur.rot : (S.current.rots[id] ?? 0);
+    const d: Drag = { kind: "block", id, px: e.clientX, py: e.clientY, sx: e.clientX, sy: e.clientY, touch: e.pointerType === "touch", moved: false, from, rot, hover: null, target: null, overBoard: false };
+    S.current.drag = d;
+    setDrag(d);
+  };
+
+  /* ----- selesai seret ----- */
+  const finishSmall = (d: Drag) => {
+    const id = d.id as Small;
+    const { assign: cur } = S.current;
+    if (!d.moved) {
+      if (d.from) setAssign((a) => { const n = { ...a }; delete n[id]; return n; }); // ketuk isi pouch = keluarkan
+      return;
+    }
+    if (d.hover) {
+      const p = d.hover as PouchId;
+      const without = { ...cur };
+      delete without[id];
+      if (usedCap(without, p) + SMALLS[id].size > POUCHES[p].cap) {
+        setMsg(`${POUCHES[p].name} tidak cukup ruang untuk ${SMALLS[id].name}.`);
+        shake();
+        return;
+      }
+      setAssign({ ...without, [id]: p });
+    } else if (d.from) {
+      setAssign((a) => { const n = { ...a }; delete n[id]; return n; });
+    }
+  };
+
+  const rotateInPlace = (id: BlockId) => {
+    const cur = S.current.placed.find((p) => p.id === id);
+    if (!cur) return;
+    if (hasAbove(S.current.placed, cur)) { setMsg("Ada barang di atasnya, tidak bisa diputar."); return; }
+    const d = dimsOf(id, cur.rot);
+    const others = settle(S.current.placed.filter((p) => p.id !== id));
+    const next = nearestDrop(others, id, (1 - cur.rot) as Orient, cur.x + d.w / 2, cur.y + d.l / 2);
+    if (!next) { setMsg("Tidak muat kalau diputar di sini."); shake(); return; }
+    setPlaced(settle([...others, next]));
+    setRots((r) => ({ ...r, [id]: next.rot }));
+    setMsg("");
+  };
+
+  const finishBlock = (d: Drag) => {
+    const id = d.id as BlockId;
+    if (!d.moved) {
+      if (d.from === "table") setRots((r) => ({ ...r, [id]: (1 - (r[id] ?? 0)) as Orient }));
+      else rotateInPlace(id);
+      return;
+    }
+    const others = settle(S.current.placed.filter((p) => p.id !== id));
+    if (d.target) {
+      setPlaced(settle([...others, d.target]));
+      setRots((r) => ({ ...r, [id]: d.rot }));
+      setMsg("");
+    } else if (d.overBoard) {
+      setMsg("Tidak muat di situ. Coba arah lain (tekan R atau ketuk barang untuk memutar), atau tumpuk di tempat lain.");
+      shake();
+    } else if (d.from === "board") {
+      setPlaced(others); // dibawa keluar koper
+    }
+  };
+
+  /* ----- listener global selama menyeret ----- */
+  const dragging = drag !== null;
+  useEffect(() => {
+    if (!dragging) return;
+    const move = (e: PointerEvent) => {
+      const d = S.current.drag;
+      if (!d) return;
+      const moved = d.moved || Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 6;
+      let next: Drag = { ...d, px: e.clientX, py: e.clientY, moved };
+      if (moved) {
+        if (d.kind === "small") next = { ...next, hover: computeSmallHover(e.clientX, e.clientY) };
+        else next = { ...next, ...computeTarget(next) };
+      }
+      S.current.drag = next;
+      setDrag(next);
+    };
+    const up = () => {
+      const d = S.current.drag;
+      S.current.drag = null;
+      setDrag(null);
+      if (!d) return;
+      if (d.kind === "small") finishSmall(d); else finishBlock(d);
+    };
+    const key = (e: KeyboardEvent) => {
+      const d = S.current.drag;
+      if (!d || d.kind !== "block" || !(e.key === "r" || e.key === "R" || e.key === " ")) return;
+      e.preventDefault();
+      let next: Drag = { ...d, rot: (1 - d.rot) as Orient };
+      if (next.moved) next = { ...next, ...computeTarget(next) };
+      S.current.drag = next;
+      setDrag(next);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      window.removeEventListener("keydown", key);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragging]);
+
+  /* ----- tombol ----- */
+  const allSorted = SMALL_IDS.every((s) => assign[s]);
+  const closePouches = () => {
+    const pr = sortProblems(assign, variant);
+    if (pr.broken > 0) {
+      onPenalty?.(SORT_PENALTY_MS);
+      setMsg(`${pr.broken} catatan Mia soal pouch belum terpenuhi. Waktu bertambah 10 detik.`);
+      shake();
+      return;
+    }
+    setPlaced([]);
+    setRots({});
+    setMsg("Pouch beres! Sekarang susun semuanya ke koper.");
+    setPhase("pack");
+  };
+  const reopenPouches = () => {
+    setPlaced([]);
+    setRots({});
+    setMsg("");
+    setPhase("sort");
+  };
+  const zip = () => {
+    const broken = brokenRules(placed, variant, assign);
+    if (broken > 0) {
+      onPenalty?.(ZIP_PENALTY_MS);
+      setMsg(`Resleting macet! ${broken} dari ${variant.rules.length} catatan Mia belum terpenuhi. Waktu bertambah 15 detik.`);
+      shake();
+      return;
+    }
+    setMsg("");
+    setPhase("zipped");
+  };
+
+  /* ----- layar bersih setelah diresletingkan ----- */
+  if (phase === "zipped") {
+    return (
+      <div className="mt-6 flex min-h-[62vh] select-none flex-col items-center justify-center px-2 pb-6">
+        <div className="packed-zoom"><ClosedSuitcase /></div>
+        <Button className="packed-cta mt-7" size="lg" onClick={onWin}>Berangkat! ✈️</Button>
+      </div>
+    );
+  }
+
+  const unplaced = BLOCK_IDS.filter((id) => !placed.some((p) => p.id === id));
+  const unassigned = SMALL_IDS.filter((s) => !assign[s]);
+  const draggedId = drag?.moved ? drag.id : null;
+  const smallSize = narrow ? 62 : 84;
+  const smallTableH = narrow ? 210 : 190;
+  const blockTableH = narrow ? 300 : 300;
+  const notes = phase === "sort"
+    ? ["Pouch kecil muat 2 slot, pouch besar 4 slot.", "Alat mandi, cemilan, dan daleman butuh 2 slot. Makeup dan aksesoris 1 slot.", ...variant.banTexts]
+    : variant.rules.map((r) => r.text);
+
   return (
-    <div>
-      <strong className="mb-2 block text-xs tracking-widest text-muted-foreground">{title.toUpperCase()}</strong>
-      <div className="flex min-h-14 flex-wrap items-end gap-3 rounded-2xl border-2 border-dashed border-border bg-card/60 p-3">{children}</div>
+    <div className="pk mt-2 select-none">
+      <div className="pk-layout">
+        <div className="pk-main">
+          {phase === "sort" ? (
+            <>
+              <div className="pk-section">1. Masukkan barang kecil ke pouch</div>
+              <div className="pk-pouches">
+                {POUCH_IDS.map((p) => {
+                  const items = contentsOf(assign, p);
+                  const w = 2 * (narrow ? 62 : 88);
+                  const h = (p === "pc" ? 2 : 1) * (narrow ? 62 : 88);
+                  return (
+                    <div key={p} data-pouch={p} className={cn("pk-pouch", drag?.hover === p && "pk-hover")} style={{ width: w, height: h }}>
+                      <img src={POUCH_ART[pouchKind(p)].top} alt={POUCHES[p].name} draggable={false} className="pointer-events-none h-full w-full object-contain" />
+                      {contentLayout(items.length, w, h).map((c, i) => {
+                        const s = items[i];
+                        return s ? (
+                          <img key={s} src={ART[s]} alt={SMALLS[s].name} title={SMALLS[s].name} draggable={false} className="pk-incontent" data-small={s}
+                            style={{ left: c.x, top: c.y, width: c.s, height: c.s, opacity: draggedId === s ? 0.25 : 1 }}
+                            onPointerDown={(e) => beginSmall(e, s, p)} />
+                        ) : null;
+                      })}
+                      <span className="pk-cap">{usedCap(assign, p)}/{POUCHES[p].cap}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className={cn("pk-table", shaking && "pk-shake")} style={{ height: unassigned.length === 0 ? 64 : smallTableH }}>
+                {unassigned.length === 0 && <span className="pk-empty">Semua barang sudah masuk pouch</span>}
+                {unassigned.map((s) => {
+                  const pos = smallScatter.pos[s];
+                  return pos ? (
+                    <FlatSmall key={s} id={s} size={smallSize} onPointerDown={(e) => beginSmall(e, s, null)}
+                      style={{ left: `${pos.left}%`, top: `${pos.top}%`, transform: `translate(-50%,-50%) rotate(${pos.rot}deg)`, opacity: draggedId === s ? 0.25 : 1 }} />
+                  ) : null;
+                })}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="pk-section">2. Susun semuanya ke koper (bisa ditumpuk 2 lapis)</div>
+              <div className="pk3-stage" style={{ height: stageH, ["--cell" as string]: `${cell}px`, ["--unit" as string]: `${unit}px`, ["--gap" as string]: `${gap}px`, ["--tilt" as string]: `${TILT}deg` } as CSSProperties}>
+                <div className="pk3-tilt">
+                  <div className={cn("pk3-case", shaking && "pk-shake")}>
+                    <div className="pk3-floor" style={{ width: floorW, height: floorH }}>
+                      {[0, 1].map((side) => (
+                        <div key={side} className="pk3-half" style={{ left: side ? HALF * cell + gap : 0, width: HALF * cell, height: floorH }} />
+                      ))}
+                      <div className="pk3-hinge" style={{ left: HALF * cell, width: gap }}>{Array.from({ length: 8 }, (_, i) => <i key={i} />)}</div>
+                      <div className="pk3-wall pk3-back" /><div className="pk3-wall pk3-left" /><div className="pk3-wall pk3-right" />
+                      {Array.from({ length: COLS * ROWS }, (_, i) => {
+                        const x = i % COLS, y = Math.floor(i / COLS);
+                        return <div key={i} className="pk3-cell" data-cell={`${x},${y}`} style={{ left: x * cell + (x >= HALF ? gap : 0), top: y * cell, width: cell, height: cell }} />;
+                      })}
+                      {placed.map((p) => (
+                        <Block3D key={p.id} p={p} assign={assign} cell={cell} unit={unit} gap={gap} dim={draggedId === p.id} onPointerDown={(e) => beginBlock(e, p.id, "board")} />
+                      ))}
+                      {drag?.kind === "block" && drag.moved && (() => {
+                        const t = drag.target;
+                        const d = t ? dimsOf(t.id, t.rot) : null;
+                        return t && d ? (
+                          <div className="pk3-landing" style={{ left: t.x * cell + (t.x >= HALF ? gap : 0), top: t.y * cell, width: d.w * cell, height: d.l * cell, transform: `translateZ(${(t.z + d.t) * unit}px)` }} />
+                        ) : null;
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="pk-table" style={{ height: unplaced.length === 0 ? 64 : blockTableH }}>
+                {unplaced.length === 0 && <span className="pk-empty">Semua barang sudah di dalam koper</span>}
+                {unplaced.map((id) => {
+                  const pos = blockScatter.pos[id];
+                  return pos ? (
+                    <FlatBlock key={id} id={id} assign={assign} px={cell * tableScale} rot={rots[id] ?? 0} onPointerDown={(e) => beginBlock(e, id, "table")}
+                      style={{ left: `${pos.left}%`, top: `${pos.top}%`, transform: `translate(-50%,-50%) rotate(${pos.rot}deg)`, opacity: draggedId === id ? 0.25 : 1 }} />
+                  ) : null;
+                })}
+              </div>
+            </>
+          )}
+          <p className="pk-msg" role="status" aria-live="polite">{msg || (phase === "sort" ? "Seret barang ke pouch. Ketuk isi pouch untuk mengeluarkannya." : "Seret barang ke koper. Ketuk barang atau tekan R untuk memutar.")}</p>
+          <div className="pk-actions">
+            {phase === "sort" ? (
+              <Button disabled={!allSorted} onClick={closePouches}>Tutup semua pouch <Sparkles /></Button>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={() => { setPlaced([]); setRots({}); setMsg(""); }}>Bongkar semua</Button>
+                <Button variant="secondary" onClick={reopenPouches}>Ubah isi pouch</Button>
+                <Button disabled={placed.length < BLOCK_IDS.length} onClick={zip}>Resleting koper <Sparkles /></Button>
+              </>
+            )}
+          </div>
+        </div>
+        <aside className="pk-notes">
+          <h3>CATATAN MIA</h3>
+          <ol>{notes.map((n, i) => <li key={i}>{n}</li>)}</ol>
+        </aside>
+      </div>
+      {drag?.moved && createPortal(
+        <div className="pk-ghost" style={{ left: drag.px, top: drag.py - (drag.touch ? 60 : 0) }}>
+          {drag.kind === "small"
+            ? <FlatSmall id={drag.id as Small} size={smallSize} />
+            : <FlatBlock id={drag.id as BlockId} assign={assign} px={cell * 0.62} rot={drag.rot} label={false} />}
+          <span className="pk-ghost-name">{nameOf(drag.id, assign)}</span>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
