@@ -286,7 +286,18 @@ function BirthdayQuest() {
           hud={<Dashboard usn={usn} completed={completed} ms={finalMs ?? playMsRef.current} finished={finalMs !== null} onBoard={() => setBoardOpen(true)} onSwitch={switchPlayer} />}
         />
       )}
-      {view === "jakarta" && <JakartaQuest onBack={() => setView("map")} onWin={() => finishQuest(0)} />}
+      {view === "jakarta" && (
+        <JakartaQuest
+          onBack={() => setView("map")}
+          onWin={() => finishQuest(0)}
+          usn={usn}
+          onPenalty={(ms) => {
+            if (finalMs !== null) return; // main ulang setelah selesai tidak mengubah waktu
+            playMsRef.current += ms;
+            savePlayMs(playMsRef.current);
+          }}
+        />
+      )}
       {view === "jogja" && <JogjaQuest onBack={() => setView("map")} onWin={() => finishQuest(1)} onFound={() => sound("tap")} />}
       {view === "belanda" && <MazeQuest onBack={() => setView("map")} onWin={() => finishQuest(2)} />}
       {view === "postcards" && (
@@ -395,11 +406,11 @@ function GameShell({ title, location, icon, onBack, children }: { title: string;
   );
 }
 
-function JakartaQuest({ onBack, onWin }: { onBack: () => void; onWin: () => void }) {
+function JakartaQuest({ onBack, onWin, usn, onPenalty }: { onBack: () => void; onWin: () => void; usn: string; onPenalty: (ms: number) => void }) {
   return (
     <GameShell title="Packing Koper Ajaib" location="POS 01 • JAKARTA" icon={<img src={jakartaPlace} alt="" draggable={false} className="h-12 w-12 rounded-full border-2 border-foreground object-cover" />} onBack={onBack}>
-      <div className="game-copy"><span className="round-pill">SIAP BERANGKAT</span><p>Masukkan semua barang ke koper tanpa numpuk. Barang kecil wajib masuk pouch transparan (kecuali daleman!). Bongkar pasang sampai semuanya muat.</p></div>
-      <PackingQuest onWin={onWin} />
+      <div className="game-copy"><span className="round-pill">SIAP BERANGKAT</span><p>Masukkan barang kecil ke pouch, lalu susun semuanya ke koper. Baca Catatan Mia baik-baik: kalau resleting macet, waktumu bertambah.</p></div>
+      <PackingQuest onWin={onWin} usn={usn} onPenalty={onPenalty} />
     </GameShell>
   );
 }
