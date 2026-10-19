@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { type Entry, fetchBoard, formatTime, sameName } from "@/lib/player";
 
 const TOP = 100;
-// Video hadiah (YouTube, tidak publik). Ganti ID-nya kalau videonya diganti. Pastikan "Izinkan penyematan" aktif di YouTube Studio.
+// Video hadiah. Taruh file videonya di folder public/ dengan nama hadiah.mp4 (paling rapi, tanpa nama channel YouTube).
+const PRIZE_MP4 = "/hadiah.mp4";
+// Cadangan kalau hadiah.mp4 tidak ada: YouTube (tidak publik). Ganti ID-nya kalau videonya diganti. Pastikan "Izinkan penyematan" aktif di YouTube Studio.
 const PRIZE_VIDEO_ID = "6p-5HDIFzGs";
 const PRIZE_EMBED = `https://www.youtube-nocookie.com/embed/${PRIZE_VIDEO_ID}?autoplay=1&rel=0&playsinline=1&modestbranding=1`;
 const PRIZE_LINK = `https://youtube.com/shorts/${PRIZE_VIDEO_ID}`;
@@ -30,6 +32,10 @@ const savePrizeSeen = (me: string) => {
 };
 
 function PrizeModal({ onClose }: { onClose: () => void }) {
+  // Utamakan file video sendiri (bersih, tanpa nama channel). Kalau filenya belum ada / gagal dimuat, pakai YouTube.
+  const [useYoutube, setUseYoutube] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -38,6 +44,11 @@ function PrizeModal({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  useEffect(() => {
+    // Kalau browser menahan autoplay, tombol play di video tetap bisa ditekan.
+    videoRef.current?.play().catch(() => {});
+  }, []);
+
   return (
     <div className="prize-stage" role="dialog" aria-modal="true" aria-label="Hadiah">
       <div className="prize-card">
@@ -45,15 +56,19 @@ function PrizeModal({ onClose }: { onClose: () => void }) {
         <small>SELAMAT! 3 POS SELESAI</small>
         <h3><Gift className="inline h-6 w-6 align-[-3px]" /> Hadiahmu</h3>
         <div className="prize-frame">
-          <iframe
-            src={PRIZE_EMBED}
-            title="Video hadiah"
-            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-            allowFullScreen
-            referrerPolicy="strict-origin-when-cross-origin"
-          />
+          {useYoutube ? (
+            <iframe
+              src={PRIZE_EMBED}
+              title="Video hadiah"
+              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+              allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
+            />
+          ) : (
+            <video ref={videoRef} src={PRIZE_MP4} controls autoPlay playsInline preload="auto" onError={() => setUseYoutube(true)} />
+          )}
         </div>
-        <a className="prize-link" href={PRIZE_LINK} target="_blank" rel="noreferrer">Video tidak muncul? Buka di YouTube</a>
+        {useYoutube && <a className="prize-link" href={PRIZE_LINK} target="_blank" rel="noreferrer">Video tidak muncul? Buka di YouTube</a>}
         <Button onClick={onClose}>Kembali ke Leaderboard</Button>
       </div>
     </div>
