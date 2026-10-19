@@ -27,6 +27,7 @@ import { EntryGate } from "@/components/EntryGate";
 import { Leaderboard } from "@/components/Leaderboard";
 import { FlowerWordSearch } from "@/components/quests/FlowerWordSearch";
 import { PackingQuest } from "@/components/quests/PackingQuest";
+import { PrizePhotoModal, prizePhotoOf, readClaimed, saveClaimed } from "@/components/PrizePhoto";
 import { Button } from "@/components/ui/button";
 import {
   clearPlayer,
@@ -247,6 +248,7 @@ function BirthdayQuest() {
     return (
       <main className="relative min-h-dvh overflow-hidden bg-background text-foreground">
         <div className="sun-grid pointer-events-none absolute inset-0" />
+      <span className="made-by" aria-hidden="true">made by: joe_pietz</span>
         <EntryGate onEnter={beginPlayer} />
       </main>
     );
@@ -255,6 +257,7 @@ function BirthdayQuest() {
   return (
     <main className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       <div className="sun-grid pointer-events-none absolute inset-0" />
+      <span className="made-by" aria-hidden="true">made by: joe_pietz</span>
       {celebrating && <Confetti />}
       <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 sm:px-8 sm:py-6">
         <button className="brand-mark" onClick={() => setView("map")} aria-label="Kembali ke peta">
@@ -303,7 +306,7 @@ function BirthdayQuest() {
         <PostcardCollection completed={completed} onBack={() => setView("map")} onOpen={setOpenedCard} />
       )}
       {openedCard !== null && (
-        <PostcardModal index={openedCard} onClose={() => closeCard(false)} onContinue={() => closeCard(true)} />
+        <PostcardModal index={openedCard} me={usn} onClose={() => closeCard(false)} onContinue={() => closeCard(true)} />
       )}
       {boardOpen && <Leaderboard me={usn} myMs={finalMs} onClose={() => setBoardOpen(false)} />}
     </main>
@@ -588,10 +591,18 @@ function pickPhoto(city: string, photos: string[]) {
   return pick;
 }
 
-function PostcardModal({ index, onClose, onContinue }: { index: number; onClose: () => void; onContinue: () => void }) {
+function PostcardModal({ index, me, onClose, onContinue }: { index: number; me: string; onClose: () => void; onContinue: () => void }) {
   const card = POSTCARDS[index] ?? POSTCARDS[0];
   const [photo] = useState(() => (card ? pickPhoto(card.city, card.photos) : undefined));
+  const hasPrize = Boolean(prizePhotoOf(index));
+  const [claimed, setClaimed] = useState(() => readClaimed(me, index));
+  const [prizeOpen, setPrizeOpen] = useState(false);
   if (!card) return null;
+  const openPrize = () => {
+    setPrizeOpen(true);
+    setClaimed(true);
+    saveClaimed(me, index);
+  };
   return (
     <div className="postcard-modal" role="dialog" aria-modal="true" aria-label={`Postcard dari ${card.city}`}>
       <button className="modal-close" onClick={onClose} aria-label="Tutup"><X /></button>
@@ -599,7 +610,15 @@ function PostcardModal({ index, onClose, onContinue }: { index: number; onClose:
         <div className="letter-visual">{photo && <img className="letter-photo" src={photo} alt={`Foto ${card.city}`} draggable={false} />}<span className="postcard-stamp">{card.stamp}</span><small>POSTCARD FROM</small><h2>{card.city}</h2></div>
         <div className="letter-copy"><Heart fill="currentColor" /><h3>Untuk Mia,</h3><p>{card.letter}</p><strong>Happy Birthday, Mia!</strong><small>— dengan hangat, dari semua yang sayang Mia</small></div>
       </div>
-      <Button className="mt-5" onClick={onContinue}>{index === 2 ? "Kembali ke Peta" : "Lanjutkan Petualangan"} <ArrowRight /></Button>
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+        {hasPrize && (
+          <Button className={claimed ? undefined : "pp-claim"} variant={claimed ? "outline" : "default"} onClick={openPrize}>
+            <Gift /> {claimed ? "Lihat hadiah lagi" : "Klaim hadiah"}
+          </Button>
+        )}
+        <Button variant={hasPrize && !claimed ? "outline" : "default"} onClick={onContinue}>{index === 2 ? "Kembali ke Peta" : "Lanjutkan Petualangan"} <ArrowRight /></Button>
+      </div>
+      {prizeOpen && <PrizePhotoModal index={index} onClose={() => setPrizeOpen(false)} />}
     </div>
   );
 }
