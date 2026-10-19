@@ -93,16 +93,34 @@ function scatter(ids: string[], seed: number, cols: number) {
   return { pos: out, rows };
 }
 
-function contentLayout(n: number, w: number, h: number) {
-  if (n === 0) return [];
-  const cols = n <= 2 ? n : 2;
-  const rows = Math.ceil(n / cols);
-  const s = Math.min(w / cols, h / rows) * 0.8;
-  return Array.from({ length: n }, (_, i) => ({
-    x: ((i % cols) + 0.5) * (w / cols) - s / 2,
-    y: (Math.floor(i / cols) + 0.5) * (h / rows) - s / 2 + h * 0.04,
-    s,
-  }));
+/* ---------- Slot di dalam pouch: tiap kotak = 1 slot, barang 2 slot selebar 2 kotak ---------- */
+const POUCH_GRID: Record<PouchId, { cols: number; rows: number }> = { pa: { cols: 2, rows: 1 }, pb: { cols: 2, rows: 1 }, pc: { cols: 2, rows: 2 } };
+// Bagian dalam gambar pouch (rasio) yang dipakai untuk kotak slot.
+const POUCH_INSET = { wide: { l: 0.09, r: 0.09, t: 0.26, b: 0.1 }, sq: { l: 0.11, r: 0.11, t: 0.2, b: 0.1 } };
+type SlotBox = { id: Small; x: number; y: number; w: number; h: number };
+function slotLayout(p: PouchId, items: Small[], w: number, h: number) {
+  const { cols, rows } = POUCH_GRID[p];
+  const ins = POUCH_INSET[p === "pc" ? "sq" : "wide"];
+  const ix = w * ins.l, iy = h * ins.t, iw = w * (1 - ins.l - ins.r), ih = h * (1 - ins.t - ins.b);
+  const cw = iw / cols, ch = ih / rows;
+  const cells: { x: number; y: number; w: number; h: number }[] = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push({ x: ix + c * cw, y: iy + r * ch, w: cw, h: ch });
+  const taken = Array.from({ length: rows }, () => Array<boolean>(cols).fill(false));
+  const boxes: SlotBox[] = [];
+  // barang 2 slot dulu (satu baris penuh), lalu barang 1 slot mengisi sisa kotak
+  const order = [...items].sort((a, b) => SMALLS[b].size - SMALLS[a].size);
+  for (const id of order) {
+    const span = SMALLS[id].size;
+    search: for (let r = 0; r < rows; r++) {
+      for (let c = 0; c + span <= cols; c++) {
+        if (taken[r]!.slice(c, c + span).some(Boolean)) continue;
+        for (let k = 0; k < span; k++) taken[r]![c + k] = true;
+        boxes.push({ id, x: ix + c * cw, y: iy + r * ch, w: span * cw, h: ch });
+        break search;
+      }
+    }
+  }
+  return { cells, boxes };
 }
 
 const pouchKind = (id: PouchId) => (id === "pc" ? "sq" : "wide");
@@ -121,7 +139,7 @@ function FlatSmall({ id, size, className, style, onPointerDown }: { id: Small; s
   return (
     <div className={cn("pk-flat", className)} style={{ width: size, height: size, ...style }} onPointerDown={onPointerDown} data-small={id} title={SMALLS[id].name}>
       <img src={ART[id]} alt={SMALLS[id].name} draggable={false} className="h-full w-full object-contain" />
-      <span className="pk-pips">{"●".repeat(SMALLS[id].size)}</span>
+      <span className="pk-pips">{SMALLS[id].size} slot</span>
     </div>
   );
 }
@@ -136,10 +154,9 @@ function FlatBlock({ id, assign, px, rot, className, style, onPointerDown, label
         {isPouch(id) ? (
           <>
             <img src={POUCH_ART[pouchKind(id)].top} alt="" draggable={false} className="h-full w-full object-contain" />
-            {contentLayout(contentsOf(assign, id).length, w, h).map((c, i) => {
-              const s = contentsOf(assign, id)[i];
-              return s ? <img key={s} src={ART[s]} alt="" draggable={false} className="absolute object-contain" style={{ left: c.x, top: c.y, width: c.s, height: c.s }} /> : null;
-            })}
+            {slotLayout(id as PouchId, contentsOf(assign, id), w, h).boxes.map((c) => (
+              <img key={c.id} src={ART[c.id]} alt="" draggable={false} className="absolute object-contain" style={{ left: c.x + c.w * 0.05, top: c.y + c.h * 0.05, width: c.w * 0.9, height: c.h * 0.9 }} />
+            ))}
           </>
         ) : (
           <img src={ART[id]} alt="" draggable={false} className="h-full w-full object-contain" />
@@ -179,12 +196,9 @@ function Block3D({ p, assign, cell, unit, gap, dim, onPointerDown }: { p: Placed
               style={{ transform: `translateZ(${base + height * f}px) scale(${s * (1 - pad)})`, filter: top ? undefined : `brightness(${0.7 + 0.2 * f}) saturate(.92)`, opacity: pouch && !top && !bottom ? 0.9 : 1 }} />
           );
         })}
-        {contentLayout(items.length, w, h).map((c, i) => {
-          const s = items[i];
-          return s ? (
-            <img key={s} className="pk3-layer" draggable={false} src={ART[s]} alt="" style={{ left: c.x, top: c.y, width: c.s, height: c.s, right: "auto", bottom: "auto", transform: `translateZ(${base + height * 0.42}px)`, filter: "drop-shadow(2px 3px 0 rgba(60,35,0,.28))" }} />
-          ) : null;
-        })}
+        {pouch && slotLayout(p.id as PouchId, items, w, h).boxes.map((c) => (
+          <img key={c.id} className="pk3-layer" draggable={false} src={ART[c.id]} alt="" style={{ left: c.x + c.w * 0.05, top: c.y + c.h * 0.05, width: c.w * 0.9, height: c.h * 0.9, right: "auto", bottom: "auto", transform: `translateZ(${base + height * 0.42}px)`, filter: "drop-shadow(2px 3px 0 rgba(60,35,0,.28))" }} />
+        ))}
       </div>
       {pouch && items.length > 0 && (
         <div className="pk3-badge" style={{ transform: `translateZ(${base + height + 6}px) rotateX(-${TILT}deg)` }}>{items.length}</div>
@@ -281,7 +295,7 @@ export function PackingQuest({ onWin, usn, onPenalty }: { onWin: () => void; usn
       const without = { ...cur };
       delete without[id];
       if (usedCap(without, p) + SMALLS[id].size > POUCHES[p].cap) {
-        setMsg(`${POUCHES[p].name} tidak cukup ruang untuk ${SMALLS[id].name}.`);
+        setMsg(`${POUCHES[p].name} tinggal ${POUCHES[p].cap - usedCap(without, p)} slot, sedangkan ${SMALLS[id].name} butuh ${SMALLS[id].size} slot.`);
         shake();
         return;
       }
@@ -419,7 +433,7 @@ export function PackingQuest({ onWin, usn, onPenalty }: { onWin: () => void; usn
   const smallTableH = narrow ? 210 : 190;
   const blockTableH = narrow ? 300 : 300;
   const notes = phase === "sort"
-    ? ["Pouch kecil muat 2 slot, pouch besar 4 slot.", "Alat mandi, cemilan, dan daleman butuh 2 slot. Makeup dan aksesoris 1 slot.", ...variant.banTexts]
+    ? ["Setiap kotak di dalam pouch = 1 slot. Pouch kecil punya 2 slot, pouch besar punya 4 slot.", "Alat mandi, cemilan, dan daleman butuh 2 slot (selebar 2 kotak). Makeup dan aksesoris butuh 1 slot.", ...variant.banTexts]
     : variant.rules.map((r) => r.text);
 
   return (
@@ -432,20 +446,26 @@ export function PackingQuest({ onWin, usn, onPenalty }: { onWin: () => void; usn
               <div className="pk-pouches">
                 {POUCH_IDS.map((p) => {
                   const items = contentsOf(assign, p);
-                  const w = 2 * (narrow ? 62 : 88);
-                  const h = (p === "pc" ? 2 : 1) * (narrow ? 62 : 88);
+                  const w = 2 * (narrow ? 62 : 82);
+                  const h = (p === "pc" ? 2 : 1) * (narrow ? 62 : 82);
+                  const { cells, boxes } = slotLayout(p, items, w, h);
+                  const dragSmall = drag?.kind === "small" && drag.moved && drag.hover === p ? (drag.id as Small) : null;
+                  const withoutDragged = { ...assign };
+                  if (dragSmall) delete withoutDragged[dragSmall];
+                  const hoverFit = dragSmall ? usedCap(withoutDragged, p) + SMALLS[dragSmall].size <= POUCHES[p].cap : null;
                   return (
-                    <div key={p} data-pouch={p} className={cn("pk-pouch", drag?.hover === p && "pk-hover")} style={{ width: w, height: h }}>
+                    <div key={p} data-pouch={p} className={cn("pk-pouch", hoverFit === true && "pk-hover", hoverFit === false && "pk-nofit")} style={{ width: w, height: h }}>
                       <img src={POUCH_ART[pouchKind(p)].top} alt={POUCHES[p].name} draggable={false} className="pointer-events-none h-full w-full object-contain" />
-                      {contentLayout(items.length, w, h).map((c, i) => {
-                        const s = items[i];
-                        return s ? (
-                          <img key={s} src={ART[s]} alt={SMALLS[s].name} title={SMALLS[s].name} draggable={false} className="pk-incontent" data-small={s}
-                            style={{ left: c.x, top: c.y, width: c.s, height: c.s, opacity: draggedId === s ? 0.25 : 1 }}
-                            onPointerDown={(e) => beginSmall(e, s, p)} />
-                        ) : null;
-                      })}
-                      <span className="pk-cap">{usedCap(assign, p)}/{POUCHES[p].cap}</span>
+                      {cells.map((c, i) => <span key={i} className="pk-slot" style={{ left: c.x, top: c.y, width: c.w, height: c.h }} />)}
+                      {boxes.map((c) => (
+                        <span key={c.id} className="pk-slotbg" style={{ left: c.x + 2, top: c.y + 2, width: c.w - 4, height: c.h - 4 }} />
+                      ))}
+                      {boxes.map((c) => (
+                        <img key={c.id} src={ART[c.id]} alt={SMALLS[c.id].name} title={SMALLS[c.id].name} draggable={false} className="pk-incontent" data-small={c.id}
+                          style={{ left: c.x + c.w * 0.06, top: c.y + c.h * 0.06, width: c.w * 0.88, height: c.h * 0.88, opacity: draggedId === c.id ? 0.25 : 1 }}
+                          onPointerDown={(e) => beginSmall(e, c.id, p)} />
+                      ))}
+                      <span className={cn("pk-cap", hoverFit === false && "pk-cap-bad")}>{hoverFit === false ? "slot kurang" : `${usedCap(assign, p)}/${POUCHES[p].cap} slot`}</span>
                     </div>
                   );
                 })}
