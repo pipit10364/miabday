@@ -29,7 +29,6 @@ import { FlowerWordSearch } from "@/components/quests/FlowerWordSearch";
 import { PackingQuest } from "@/components/quests/PackingQuest";
 import { Button } from "@/components/ui/button";
 import {
-  LEADERBOARD_DELAY_MS,
   clearPlayer,
   formatTime,
   loadSaved,
@@ -208,7 +207,7 @@ function BirthdayQuest() {
     setView(place);
   };
 
-  // Postcard terakhir ditutup untuk pertama kali: 5 detik kemudian stage leaderboard muncul.
+  // Postcard terakhir ditutup untuk pertama kali: stage leaderboard langsung muncul.
   const closeCard = (toMap: boolean) => {
     const firstFinish = openedCard === 2 && finalMs !== null && !boardSeen;
     setOpenedCard(null);
@@ -216,7 +215,7 @@ function BirthdayQuest() {
     if (firstFinish) {
       setBoardSeen(true);
       saveBoardSeen();
-      boardTimer.current = setTimeout(() => setBoardOpen(true), LEADERBOARD_DELAY_MS);
+      setBoardOpen(true);
     }
   };
 
