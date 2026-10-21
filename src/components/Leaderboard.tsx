@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { track } from "@/lib/analytics";
 import { type Entry, fetchBoard, formatTime, sameName } from "@/lib/player";
 
-const TOP = 100;
 // Video hadiah. Taruh file videonya di folder public/ dengan nama hadiah.mp4 (paling rapi, tanpa nama channel YouTube).
 const PRIZE_MP4 = "/hadiah.mp4";
 // Cadangan kalau hadiah.mp4 tidak ada: YouTube (tidak publik). Ganti ID-nya kalau videonya diganti. Pastikan "Izinkan penyematan" aktif di YouTube Studio.
@@ -13,7 +12,7 @@ const PRIZE_VIDEO_ID = "6p-5HDIFzGs";
 const PRIZE_EMBED = `https://www.youtube-nocookie.com/embed/${PRIZE_VIDEO_ID}?autoplay=1&rel=0&playsinline=1&modestbranding=1`;
 const PRIZE_LINK = `https://youtube.com/shorts/${PRIZE_VIDEO_ID}`;
 
-const rankLabel = (index: number) => (index >= TOP ? `${TOP}+` : String(index + 1));
+const rankLabel = (index: number) => String(index + 1);
 const medal = (rank: number) => (rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : String(rank));
 
 const prizeKey = (me: string) => `mia-golden-prize-seen:${me.toLowerCase()}`;
@@ -107,7 +106,7 @@ export function Leaderboard({ me, myMs, onClose }: { me: string; myMs: number | 
   const entries = board?.entries ?? [];
   const myIndex = entries.findIndex((e) => sameName(e.name, me));
   const myEntry = myIndex >= 0 ? entries[myIndex] : undefined;
-  const rows = entries.slice(0, TOP);
+  const rows = entries;
   const myTime = myEntry?.ms ?? myMs;
 
   return (
@@ -116,7 +115,7 @@ export function Leaderboard({ me, myMs, onClose }: { me: string; myMs: number | 
         <div className="board-head">
           <small>STAGE FINAL</small>
           <h2><Trophy className="inline h-6 w-6 align-[-2px]" /> Leaderboard</h2>
-          <small>WAKTU TERCEPAT MENYELESAIKAN 3 POS</small>
+          <small>WAKTU TERCEPAT MENYELESAIKAN 3 POS{board && entries.length > 0 ? ` · ${entries.length} PEMAIN` : ""}</small>
         </div>
         <div className="board-list">
           {!board && <p className="board-note">Memuat peringkat…</p>}
@@ -128,7 +127,6 @@ export function Leaderboard({ me, myMs, onClose }: { me: string; myMs: number | 
               <span className="board-time">{formatTime(entry.ms)}</span>
             </div>
           ))}
-          {myIndex >= TOP && <p className="board-gap">⋯</p>}
         </div>
         {/* Baris pemain sendiri selalu terlihat di bawah, seperti peringkat di Shopee. */}
         {myTime !== null && (
