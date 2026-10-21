@@ -2,6 +2,7 @@ import { Gift, Play, Trophy, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { track } from "@/lib/analytics";
 import { type Entry, fetchBoard, formatTime, sameName } from "@/lib/player";
 
 const TOP = 100;
@@ -97,6 +98,7 @@ export function Leaderboard({ me, myMs, onClose }: { me: string; myMs: number | 
   }, [board]);
 
   const openPrize = () => {
+    track("claim_video_prize");
     setPrizeOpen(true);
     setPrizeSeen(true);
     savePrizeSeen(me);
