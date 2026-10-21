@@ -27,6 +27,7 @@ import { EntryGate } from "@/components/EntryGate";
 import { Leaderboard } from "@/components/Leaderboard";
 import { FlowerWordSearch } from "@/components/quests/FlowerWordSearch";
 import { PackingQuest } from "@/components/quests/PackingQuest";
+import { track } from "@/lib/analytics";
 import { PrizePhotoModal, prizePhotoOf, readClaimed, saveClaimed } from "@/components/PrizePhoto";
 import { Button } from "@/components/ui/button";
 import {
@@ -189,12 +190,14 @@ function BirthdayQuest() {
     const next = Math.max(completed, index + 1);
     setCompleted(next);
     saveCompleted(next);
+    track("quest_complete", { quest: index + 1 });
     if (next === 3 && finalMs === null && usn) {
       flushRef.current();
       const ms = Math.max(1000, Math.round(playMsRef.current));
       setFinalMs(ms);
       saveFinalMs(ms);
       void submitScore({ name: usn, ms, at: Date.now() });
+      track("game_finish", { seconds: Math.round(ms / 1000) });
     }
     sound("win");
     setCelebrating(true);
@@ -222,6 +225,7 @@ function BirthdayQuest() {
 
   const beginPlayer = (name: string) => {
     startPlayer(name);
+    track("game_start");
     playMsRef.current = 0;
     setUsn(name);
     setCompleted(0);
@@ -599,6 +603,7 @@ function PostcardModal({ index, me, onClose, onContinue }: { index: number; me: 
   const [prizeOpen, setPrizeOpen] = useState(false);
   if (!card) return null;
   const openPrize = () => {
+    track("claim_photo_prize", { quest: index + 1 });
     setPrizeOpen(true);
     setClaimed(true);
     saveClaimed(me, index);
