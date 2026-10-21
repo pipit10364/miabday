@@ -60,8 +60,13 @@ function useNarrow() {
     const mq = window.matchMedia("(max-width: 720px)");
     const update = () => setNarrow(mq.matches);
     update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
+    // Safari lama dan WebView lama belum punya addEventListener di MediaQueryList
+    if (mq.addEventListener) {
+      mq.addEventListener("change", update);
+      return () => mq.removeEventListener("change", update);
+    }
+    mq.addListener(update);
+    return () => mq.removeListener(update);
   }, []);
   return narrow;
 }
